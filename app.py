@@ -68,6 +68,8 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from bs4 import BeautifulSoup
+import pypdf
 
 try:
     import google.generativeai as genai
@@ -154,13 +156,27 @@ MAINTENANCE_ITEMS = [
         "km": 15_000, "years": 1,
         "lpg_km": 15_000, "lpg_years": 1,
         "smart_oil_forecast": True,
-        "keywords": ["масло", "olej", "oil", "0w-16", "0w16"],
+        # "моторн"/"silnikow" — падежестойкие основы слов "моторное"/
+        # "silnikowy" (а не полное слово "масло", которое не совпадает с
+        # "масла" в родительном падеже — это и было причиной бага).
+        # Специально НЕ используем голое "масл", чтобы запись о замене
+        # масла в коробке e-CVT не засчиталась как замена моторного масла.
+        "keywords": ["моторн", "silnikow", "engine oil", "0w-16", "0w16"],
     },
     {
         "key": "spark_plugs",
         "km": 90_000, "years": None,
         "lpg_km": 45_000, "lpg_years": None,
         "keywords": ["свеч", "świec", "swiec", "plug"],
+    },
+    {
+        # Трансмиссионное масло e-CVT (Toyota ATF WS). Регламент не
+        # зависит от ГБО, поэтому lpg_km/lpg_years совпадают с km/years.
+        "key": "cvt_oil",
+        "km": 90_000, "years": 5,
+        "lpg_km": 90_000, "lpg_years": 5,
+        "custom_no_record_message_key": "cvt_oil_no_record_message",
+        "keywords": ["масло в коробке", "e-cvt", "atf ws", "atf", "olej w skrzyni", "коробк"],
     },
     {
         "key": "brake_fluid",
@@ -259,6 +275,32 @@ TR = {
         "map_period_month": "Месяц",
         "map_period_year": "Год",
         "map_period_avg_consumption": "Средний расход за период: {value} л/100км",
+        "fuel_forecast_badge": "🔮 (прогноз)",
+        "fuel_forecast_help": "Оценка ЭБУ по длительности впрыска (данные Hybrid Assistant) — не прямое измерение топлива.",
+        "fuel_real_badge": "🧾 (реально)",
+        "fuel_real_badge_note": "🧾 Реальный расход по чекам АЗС (отчёт Fuelio), в отличие от прогноза ЭБУ — это подтверждённые литры и стоимость.",
+        "fuel_type_lpg": "ГБО (газ)",
+        "fuel_type_petrol": "Бензин",
+        "map_day_refuel_note": "⛽ В этот день заправлено: {fuel} — {liters} л по {price} zł/л.",
+        "fuel_log_title": "⛽ Заправки (реальные данные, отчёт Fuelio)",
+        "fuel_log_no_data": "Нет данных о заправках — загрузите отчёт Fuelio (PDF) в папку на Google Диске рядом с базой данных.",
+        "fuel_last_refuel_date": "Последняя заправка",
+        "fuel_liters": "Залито",
+        "fuel_price": "Цена",
+        "fuel_days_ago": "{days} дн. назад",
+        "fuel_avg_consumption": "Средний расход",
+        "fuel_petrol_no_avg_note": "Нет данных — неизвестно, сколько бензина было в баке до начала наблюдений, а расход сильно зависит от доли использования бензина (в основном пуск/прогрев), так что усреднение по общему пробегу вводит в заблуждение.",
+        "fuel_trend_title": "📈 История заправок",
+        "fuel_metric_label": "Показатель",
+        "fuel_metric_days": "Дней с прошлой заправки",
+        "fuel_metric_liters": "Сколько залито, л",
+        "fuel_metric_cost": "Стоимость, zł",
+        "fuel_period_label": "Период",
+        "fuel_trend_health_title": "⛽ Тренд реального расхода LPG (по чекам)",
+        "fuel_lpg_trend_warn": "⚠️ Реальный расход LPG растёт (~{value} л/100км в мес.) — стоит проверить ГБО (форсунки, редуктор, смесь).",
+        "fuel_lpg_trend_ok": "Реальный расход LPG стабилен или снижается — признаков проблем с ГБО не выявлено.",
+        "fuel_crosscheck_title": "Сверка: прогноз ЭБУ vs реальный расход, по месяцам",
+        "fuel_crosscheck_note": "Если разрыв между прогнозом и реальным расходом растёт со временем — возможен уход калибровки форсунок/датчиков от реальности, стоит присмотреться к LTFT на вкладке \"Аналитика\".",
         "legend_ev": "EV (ДВС выключен)",
         "legend_ice": "ДВС работает",
         # --- Экспертные параметры ---
@@ -279,6 +321,7 @@ TR = {
         "maint_no_record_generic_overdue": "Запись о замене не найдена в журнале. Расчёт ведётся от 2021 года выпуска автомобиля и пробега 0 км. Замена пропущена — пробег без замены: {km} км.",
         "maint_no_record_lpg_remaining": "Запись о замене не найдена в журнале. Расчёт ведётся от точки установки ГБО (пробег 117 000 км). По регламенту осталось: {km} км.",
         "maint_no_record_lpg_overdue": "Запись о замене не найдена в журнале. Расчёт ведётся от точки установки ГБО (пробег 117 000 км). Замена пропущена — пробег без замены: {km} км.",
+        "cvt_oil_no_record_message": "Замена масла в коробке e-CVT не зафиксирована. Регламент Toyota для тяжёлых условий составляет 90 000 км или 5 лет. Рекомендуется превентивно обновить жидкость Toyota ATF WS для защиты электромоторов MG1/MG2 от перегрева.",
         "radiator_forecast_title": "Прогноз загрязнения радиаторов (тренд температур относительно уличной)",
         "radiator_forecast_result": "Разница температура инвертора/ДВС минус уличная растёт на ~{value}°C в месяц — стоит присмотреться к радиаторам.",
         "radiator_forecast_stable": "Разница температур относительно уличной стабильна — признаков забивания радиаторов не выявлено.",
@@ -289,6 +332,84 @@ TR = {
         "logs_chart_temps": "Температуры ДВС, инвертора и ВВБ",
         "logs_chart_mg": "Мотор-генераторы MG1 / MG2 (обороты и момент)",
         "logs_mg_note": "ℹ️ Hybrid Assistant не логирует фазные токи MG1/MG2 — доступны только обороты и крутящий момент.",
+        # --- Полный отчёт по поездке (как в Hybrid Assistant) ---
+        "rep_summary_title": "📋 Сводка по поездке",
+        "rep_trip": "Поездка",
+        "rep_distance": "Расстояние",
+        "rep_time": "Время",
+        "rep_moving": "В движении",
+        "rep_total": "Всего",
+        "rep_ev": "EV",
+        "rep_speed_avg": "Средняя скорость",
+        "rep_speed_max": "Макс. скорость",
+        "rep_speed_ev_avg": "Средняя скорость на EV",
+        "rep_soc_start_end": "SOC начало → конец",
+        "rep_ambient_avg": "Ср. темп. воздуха",
+        "rep_fuel_consumption": "Расход топлива",
+        "rep_ev_time_note": "Точная классификация EV/ДВС у Hybrid Assistant опирается на внутренний индикатор гибридной системы (HSI) — наш расчёт по ICE_RPM=0 может немного отличаться от их значений.",
+        "rep_soc_title": "🔋 Статистика заряда (SOC)",
+        "rep_soc_note": "ℹ️ Разбивка \"откуда взялся заряд\" (рекуперация/накат/ДВС) — фирменный внутренний расчёт Hybrid Assistant, у нас нет доступа к точной формуле, поэтому не воспроизводится.",
+        "rep_hv_title": "⚡ Высоковольтная батарея (ВВБ)",
+        "rep_hv_levels": "Уровни",
+        "rep_current": "Ток",
+        "rep_voltage": "Напряжение",
+        "rep_hv_power": "Мощность и лимиты",
+        "rep_power": "Мощность",
+        "rep_hv_from_batt": "Отдано батареей",
+        "rep_hv_to_batt": "Заряжено в батарею",
+        "rep_hv_balance": "Баланс энергии",
+        "rep_ccl_dcl_note": "CCL/DCL — лимиты заряда/разряда батареи (меняются с уровнем заряда и температурой).",
+        "rep_temp_title": "🌡️ Температуры",
+        "rep_temp_ambient": "Воздух",
+        "rep_temp_room": "В салоне/корпусе",
+        "rep_temp_coolant": "Охлаждающая жидкость ДВС",
+        "rep_temp_inverter": "Инвертор",
+        "rep_temp_mg": "Мотор-генератор",
+        "rep_hv_probes": "Датчики ВВБ",
+        "rep_elevation_title": "⛰️ Высота над уровнем моря",
+        "rep_altitude": "Высота, м",
+        "rep_upward": "Подъём",
+        "rep_downward": "Спуск",
+        "rep_elevation_note": "Подъём/спуск считаются по колонке GPS-высоты в базе — она грубее, чем внутренний расчёт Hybrid Assistant, поэтому суммарный набор высоты может быть занижен.",
+        "rep_energy_title": "🔥 Энергия от ДВС",
+        "rep_energy_from_ice": "Энергия от ДВС",
+        "rep_energy_per_100km": "Расход энергии",
+        "rep_engine_title": "🚗 Двигатель",
+        "rep_load": "Нагрузка",
+        "rep_ignitions_total": "Запусков ДВС",
+        "rep_ignitions_inefficient": "Неэффективных (<5 сек)",
+        "rep_ignitions_note": "Неэффективным считается запуск ДВС короче 5 секунд — частые короткие пуски увеличивают износ.",
+        "rep_engine_state": "Состояние ДВС",
+        "rep_ice_running": "Работает (с топливом)",
+        "rep_ice_spinning": "Крутится без топлива",
+        "rep_ice_off": "Выключен",
+        "rep_engine_state_note": "\"Крутится без топлива\" — накат/торможение двигателем без впрыска (приблизительная оценка по FUELFLOWH).",
+        "rep_psd_title": "⚙️ Планетарный редуктор (PSD): ДВС и MG1/MG2",
+        "rep_ice_torque": "Момент ДВС (расч.)",
+        "rep_psd_note": "Момент ДВС рассчитан из мощности и оборотов (М = P / ω) — это оценка, не прямое измерение.",
+        "rep_trims_title": "🎛️ Топливные коррекции",
+        "rep_effective": "Суммарная",
+        "rep_bsfc_title": "⛽ Удельный расход топлива (BSFC)",
+        "rep_bsfc_avg": "Среднее",
+        "rep_bsfc_std": "Ст. отклонение",
+        "rep_bsfc_note": "BSFC (г/кВт·ч) — сколько топлива тратится на каждый кВт·ч выработанной ДВС мощности; чем меньше, тем эффективнее работает двигатель в данной точке. Считается только по ненулевым показаниям.",
+        "rep_braking_title": "🛑 Торможение",
+        "rep_brakings_total": "Всего торможений",
+        "rep_brakings_good": "Только рекуперация",
+        "rep_brakings_bad": "Только механическое",
+        "rep_brakings_mixed": "Смешанные",
+        "rep_braking_efficiency": "Эффективность торможений",
+        "rep_energy_recovered": "Энергия рекуперации",
+        "rep_braking_note": "Эффективность = доля торможений, обошедшихся полностью рекуперацией, без задействования колодок.",
+        "rep_driver_eval_title": "👤 Оценка стиля вождения",
+        "rep_accel_nervousness": "\"Нервозность\" педали газа",
+        "rep_driver_eval_note": "Нервозность педали — среднее изменение положения педали газа между замерами; чем выше, тем резче стиль езды.",
+        "rep_glide_title": "🛞 Индекс наката (Glide)",
+        "rep_glide_avg": "Средний индекс",
+        "rep_glide_max": "Макс. индекс",
+        "rep_glide_note": "Индекс наката показывает, насколько эффективно используется накат без тяги ДВС/электромотора. Точная методика Hybrid Assistant не раскрыта, здесь — по сырому показателю GLIDEINDEX из лога.",
+        "rep_maps_title": "🗺️ Карта поездки",
+        "rep_charts_title": "📈 Графики по времени",
         "logs_battlog_note": "Показаны отдельные датчики ВВБ из подробного лога (BATTLOG) за время этой поездки.",
         "logs_no_battlog": "Подробные датчики ВВБ (BATTLOG) для этой поездки недоступны — показана усреднённая температура ВВБ из основного лога.",
         # --- Вкладка 3: Dr. Prius ---
@@ -323,6 +444,31 @@ TR = {
         "compare_trend_delta": "Рост дельты напряжений во времени",
         "compare_trend_seasonal": "Сезонное сравнение температур ВВБ (лето к лету)",
         "compare_seasonal_not_enough": "В базе данных пока только один сезон/год наблюдений — для сравнения \"лето к лету\" нужно больше исторических данных.",
+        "ha_reports_title": "📄 Тренды из HTML-отчётов Hybrid Assistant",
+        "ha_reports_explainer": "Почти все показатели уже честно считаются из самой базы данных (см. вкладку \"Детальные логи\") и совпадают с отчётом почти до знака. Но несколько фирменных расчётов Hybrid Assistant — разбивка заряда батареи по источникам, индекс наката (Glide) и оценка стиля вождения — хранятся только в готовом виде в HTML-отчёте. Загрузи несколько отчётов за разное время, чтобы отслеживать тренды по ним.",
+        "ha_reports_upload_label": "Загрузите HTML-отчёты Hybrid Assistant (можно сразу несколько)",
+        "ha_reports_limit_caption": "За один раз можно загрузить до 100 файлов, каждый до 200 МБ — это ограничения самого Streamlit по умолчанию.",
+        "ha_reports_loaded_count": "Распознано отчётов: {n}",
+        "ha_reports_parse_error": "⚠️ Не удалось распознать ни один из загруженных файлов как отчёт Hybrid Assistant.",
+        "ha_reports_hvcheck_note": "ℹ️ Если в отчёте есть результаты теста HV Check (поблочные напряжения элементов), сообщи мне — пришли пример такого отчёта, и я добавлю автоматическое извлечение этих данных для расчёта SOH, когда в самой базе HV Check пуст.",
+        "ha_trend_soc_title": "🔋 Откуда берётся заряд батареи",
+        "ha_soc_brakings": "От рекуперации при торможении",
+        "ha_soc_coasting": "От наката",
+        "ha_soc_ice": "От ДВС",
+        "ha_trend_soc_note": "Доля заряда, полученного от каждого источника, в % от общего прироста SOC за поездку.",
+        "ha_trend_brakings_warn": "⚠️ Доля заряда от рекуперативного торможения снижается (~{value} п.п./мес.) — стоит проверить тормозную систему и работу рекуперации.",
+        "ha_trend_brakings_ok": "Доля заряда от рекуперации стабильна или растёт — признаков износа не выявлено.",
+        "ha_trend_glide_title": "🛞 Индекс наката (Glide) по отчётам",
+        "ha_glide_score": "Glide score",
+        "ha_trend_glide_note": "Индекс наката из официального расчёта Hybrid Assistant (точная методика не раскрыта производителем).",
+        "ha_trend_glide_warn": "⚠️ Индекс наката снижается (~{value}/мес.) — возможен рост внутреннего сопротивления трансмиссии/PSD, стоит обратить внимание.",
+        "ha_trend_glide_ok": "Индекс наката стабилен или растёт — признаков износа трансмиссии не выявлено.",
+        "ha_trend_driver_title": "👤 Стиль вождения по отчётам",
+        "ha_accel_nervousness": "Нервозность педали газа",
+        "ha_braking_efficiency": "Эффективность торможений, %",
+        "ha_trend_driver_note": "Это про стиль вождения, а не про исправность автомобиля — просто дополнительный контекст.",
+        "ha_bsfc_crosscheck_title": "⛽ BSFC по отчётам (сверка с расчётом из базы)",
+        "ha_bsfc_crosscheck_note": "Собственный расчёт BSFC из базы данных — на вкладке \"Детальные логи\" для той же поездки; эти значения должны быть близки.",
         # --- Вкладка 5: ТО ---
         "maintenance_title": "История технического обслуживания",
         "maintenance_empty": "Записи о техническом обслуживании отсутствуют.",
@@ -405,6 +551,32 @@ TR = {
         "map_period_month": "Miesiąc",
         "map_period_year": "Rok",
         "map_period_avg_consumption": "Średnie spalanie w okresie: {value} l/100km",
+        "fuel_forecast_badge": "🔮 (prognoza)",
+        "fuel_forecast_help": "Szacunek sterownika na podstawie czasu wtrysku (dane Hybrid Assistant) — nie jest to bezpośredni pomiar paliwa.",
+        "fuel_real_badge": "🧾 (rzeczywisty)",
+        "fuel_real_badge_note": "🧾 Rzeczywiste spalanie wg paragonów ze stacji (raport Fuelio) — w odróżnieniu od prognozy sterownika, to potwierdzone litry i koszt.",
+        "fuel_type_lpg": "LPG (gaz)",
+        "fuel_type_petrol": "Benzyna",
+        "map_day_refuel_note": "⛽ Tego dnia zatankowano: {fuel} — {liters} l po {price} zł/l.",
+        "fuel_log_title": "⛽ Tankowania (dane rzeczywiste, raport Fuelio)",
+        "fuel_log_no_data": "Brak danych o tankowaniach — wgraj raport Fuelio (PDF) do folderu na Google Drive obok bazy danych.",
+        "fuel_last_refuel_date": "Ostatnie tankowanie",
+        "fuel_liters": "Zatankowano",
+        "fuel_price": "Cena",
+        "fuel_days_ago": "{days} dni temu",
+        "fuel_avg_consumption": "Średnie spalanie",
+        "fuel_petrol_no_avg_note": "Brak danych — nie wiadomo, ile benzyny było w baku przed rozpoczęciem obserwacji, a spalanie mocno zależy od udziału używania benzyny (głównie rozruch/rozgrzewanie), więc uśrednianie po całym przebiegu byłoby mylące.",
+        "fuel_trend_title": "📈 Historia tankowań",
+        "fuel_metric_label": "Wskaźnik",
+        "fuel_metric_days": "Dni od poprzedniego tankowania",
+        "fuel_metric_liters": "Ile zatankowano, l",
+        "fuel_metric_cost": "Koszt, zł",
+        "fuel_period_label": "Okres",
+        "fuel_trend_health_title": "⛽ Trend rzeczywistego spalania LPG (wg paragonów)",
+        "fuel_lpg_trend_warn": "⚠️ Rzeczywiste spalanie LPG rośnie (~{value} l/100km/mies.) — warto sprawdzić instalację LPG (wtryskiwacze, reduktor, mieszankę).",
+        "fuel_lpg_trend_ok": "Rzeczywiste spalanie LPG jest stabilne lub maleje — nie wykryto oznak problemów z LPG.",
+        "fuel_crosscheck_title": "Weryfikacja: prognoza sterownika vs rzeczywiste spalanie, wg miesięcy",
+        "fuel_crosscheck_note": "Jeśli rozbieżność między prognozą a rzeczywistym spalaniem rośnie z czasem — możliwe rozkalibrowanie wtryskiwaczy/czujników, warto przyjrzeć się LTFT w zakładce \"Analityka\".",
         "legend_ev": "EV (silnik wyłączony)",
         "legend_ice": "Silnik pracuje",
         "expert_params_title": "🧪 Parametry eksperckie",
@@ -423,6 +595,7 @@ TR = {
         "maint_no_record_generic_overdue": "Nie znaleziono wpisu o wymianie w dzienniku. Obliczenia liczone są od 2021 roku produkcji auta i przebiegu 0 km. Wymiana przeoczona — przebieg bez wymiany: {km} km.",
         "maint_no_record_lpg_remaining": "Nie znaleziono wpisu o wymianie w dzienniku. Obliczenia liczone są od momentu montażu LPG (przebieg 117 000 km). Pozostało wg harmonogramu: {km} km.",
         "maint_no_record_lpg_overdue": "Nie znaleziono wpisu o wymianie w dzienniku. Obliczenia liczone są od momentu montażu LPG (przebieg 117 000 km). Wymiana przeoczona — przebieg bez wymiany: {km} km.",
+        "cvt_oil_no_record_message": "Wymiana oleju w skrzyni e-CVT nie została odnotowana. Zalecenie Toyoty dla trudnych warunków eksploatacji to 90 000 km lub 5 lat. Zaleca się prewencyjną wymianę płynu Toyota ATF WS w celu ochrony silników elektrycznych MG1/MG2 przed przegrzaniem.",
         "radiator_forecast_title": "Prognoza zabrudzenia chłodnic (trend temperatur względem otoczenia)",
         "radiator_forecast_result": "Różnica temperatury falownika/silnika minus otoczenie rośnie o ~{value}°C miesięcznie — warto sprawdzić chłodnice.",
         "radiator_forecast_stable": "Różnica temperatur względem otoczenia jest stabilna — brak oznak zabrudzenia chłodnic.",
@@ -432,6 +605,84 @@ TR = {
         "logs_chart_temps": "Temperatury silnika, falownika i baterii HV",
         "logs_chart_mg": "Silniki MG1 / MG2 (obroty i moment)",
         "logs_mg_note": "ℹ️ Hybrid Assistant nie loguje prądów fazowych MG1/MG2 — dostępne są tylko obroty i moment obrotowy.",
+        # --- Pełny raport przejazdu (jak w Hybrid Assistant) ---
+        "rep_summary_title": "📋 Podsumowanie przejazdu",
+        "rep_trip": "Przejazd",
+        "rep_distance": "Odległość",
+        "rep_time": "Czas",
+        "rep_moving": "W ruchu",
+        "rep_total": "Razem",
+        "rep_ev": "EV",
+        "rep_speed_avg": "Średnia prędkość",
+        "rep_speed_max": "Maks. prędkość",
+        "rep_speed_ev_avg": "Średnia prędkość na EV",
+        "rep_soc_start_end": "SOC początek → koniec",
+        "rep_ambient_avg": "Śr. temp. otoczenia",
+        "rep_fuel_consumption": "Spalanie paliwa",
+        "rep_ev_time_note": "Dokładna klasyfikacja EV/silnik w Hybrid Assistant opiera się na wewnętrznym wskaźniku systemu hybrydowego (HSI) — nasze obliczenie na podstawie ICE_RPM=0 może się nieznacznie różnić od ich wartości.",
+        "rep_soc_title": "🔋 Statystyka naładowania (SOC)",
+        "rep_soc_note": "ℹ️ Podział \"skąd wzięło się naładowanie\" (rekuperacja/wybieg/silnik spalinowy) to wewnętrzny, zastrzeżony algorytm Hybrid Assistant — nie mamy dostępu do dokładnego wzoru, więc nie jest odtwarzany.",
+        "rep_hv_title": "⚡ Bateria wysokiego napięcia (HV)",
+        "rep_hv_levels": "Poziomy",
+        "rep_current": "Prąd",
+        "rep_voltage": "Napięcie",
+        "rep_hv_power": "Moc i limity",
+        "rep_power": "Moc",
+        "rep_hv_from_batt": "Oddane przez baterię",
+        "rep_hv_to_batt": "Naładowane do baterii",
+        "rep_hv_balance": "Bilans energii",
+        "rep_ccl_dcl_note": "CCL/DCL — limity ładowania/rozładowania baterii (zmieniają się z poziomem naładowania i temperaturą).",
+        "rep_temp_title": "🌡️ Temperatury",
+        "rep_temp_ambient": "Powietrze",
+        "rep_temp_room": "W kabinie/obudowie",
+        "rep_temp_coolant": "Płyn chłodniczy silnika",
+        "rep_temp_inverter": "Falownik",
+        "rep_temp_mg": "Silnik elektryczny",
+        "rep_hv_probes": "Czujniki baterii HV",
+        "rep_elevation_title": "⛰️ Wysokość nad poziomem morza",
+        "rep_altitude": "Wysokość, m",
+        "rep_upward": "Podjazd",
+        "rep_downward": "Zjazd",
+        "rep_elevation_note": "Podjazd/zjazd liczone są na podstawie kolumny wysokości GPS w bazie — jest ona mniej dokładna niż wewnętrzne obliczenia Hybrid Assistant, więc łączny przyrost wysokości może być zaniżony.",
+        "rep_energy_title": "🔥 Energia z silnika spalinowego",
+        "rep_energy_from_ice": "Energia z silnika",
+        "rep_energy_per_100km": "Zużycie energii",
+        "rep_engine_title": "🚗 Silnik",
+        "rep_load": "Obciążenie",
+        "rep_ignitions_total": "Uruchomień silnika",
+        "rep_ignitions_inefficient": "Nieefektywnych (<5 s)",
+        "rep_ignitions_note": "Za nieefektywne uznaje się uruchomienie silnika krótsze niż 5 sekund — częste krótkie starty zwiększają zużycie.",
+        "rep_engine_state": "Stan silnika",
+        "rep_ice_running": "Pracuje (z paliwem)",
+        "rep_ice_spinning": "Kręci się bez paliwa",
+        "rep_ice_off": "Wyłączony",
+        "rep_engine_state_note": "\"Kręci się bez paliwa\" — wybieg/hamowanie silnikiem bez wtrysku (przybliżona ocena na podstawie FUELFLOWH).",
+        "rep_psd_title": "⚙️ Przekładnia planetarna (PSD): silnik i MG1/MG2",
+        "rep_ice_torque": "Moment silnika (wyl.)",
+        "rep_psd_note": "Moment silnika obliczony z mocy i obrotów (M = P / ω) — to szacunek, nie bezpośredni pomiar.",
+        "rep_trims_title": "🎛️ Korekty paliwa",
+        "rep_effective": "Łączna",
+        "rep_bsfc_title": "⛽ Jednostkowe zużycie paliwa (BSFC)",
+        "rep_bsfc_avg": "Średnia",
+        "rep_bsfc_std": "Odch. std",
+        "rep_bsfc_note": "BSFC (g/kWh) — ile paliwa zużywa się na każdą kWh mocy wytworzonej przez silnik; im mniej, tym silnik pracuje efektywniej w danym punkcie. Liczone tylko po niezerowych odczytach.",
+        "rep_braking_title": "🛑 Hamowanie",
+        "rep_brakings_total": "Wszystkich hamowań",
+        "rep_brakings_good": "Tylko rekuperacja",
+        "rep_brakings_bad": "Tylko mechaniczne",
+        "rep_brakings_mixed": "Mieszane",
+        "rep_braking_efficiency": "Efektywność hamowań",
+        "rep_energy_recovered": "Energia z rekuperacji",
+        "rep_braking_note": "Efektywność = odsetek hamowań, które obyły się wyłącznie rekuperacją, bez użycia klocków.",
+        "rep_driver_eval_title": "👤 Ocena stylu jazdy",
+        "rep_accel_nervousness": "\"Nerwowość\" pedału gazu",
+        "rep_driver_eval_note": "Nerwowość pedału — średnia zmiana położenia pedału gazu między pomiarami; im wyższa, tym bardziej gwałtowny styl jazdy.",
+        "rep_glide_title": "🛞 Indeks wybiegu (Glide)",
+        "rep_glide_avg": "Średni indeks",
+        "rep_glide_max": "Maks. indeks",
+        "rep_glide_note": "Indeks wybiegu pokazuje, jak efektywnie wykorzystywany jest wybieg bez napędu silnika/elektromotoru. Dokładna metodologia Hybrid Assistant nie jest ujawniona — tu użyto surowego wskaźnika GLIDEINDEX z logu.",
+        "rep_maps_title": "🗺️ Mapa przejazdu",
+        "rep_charts_title": "📈 Wykresy w czasie",
         "logs_battlog_note": "Pokazano osobne czujniki baterii HV ze szczegółowego logu (BATTLOG) dla tego przejazdu.",
         "logs_no_battlog": "Szczegółowe czujniki baterii HV (BATTLOG) niedostępne dla tego przejazdu — pokazano uśrednioną temperaturę z głównego logu.",
         "drprius_upload_label": "Wgraj miesięczny raport CSV z Dr. Prius",
@@ -464,6 +715,31 @@ TR = {
         "compare_trend_delta": "Wzrost delty napięć w czasie",
         "compare_trend_seasonal": "Sezonowe porównanie temperatur HV (lato do lata)",
         "compare_seasonal_not_enough": "W bazie danych jest na razie tylko jeden sezon/rok obserwacji — do porównania \"lato do lata\" potrzeba więcej danych historycznych.",
+        "ha_reports_title": "📄 Trendy z raportów HTML Hybrid Assistant",
+        "ha_reports_explainer": "Prawie wszystkie wskaźniki są już rzetelnie liczone z samej bazy danych (patrz zakładka \"Szczegółowe logi\") i pokrywają się z raportem niemal co do cyfry. Ale kilka zastrzeżonych obliczeń Hybrid Assistant — podział naładowania baterii wg źródeł, indeks wybiegu (Glide) i ocena stylu jazdy — jest dostępnych tylko w gotowej postaci w raporcie HTML. Wgraj kilka raportów z różnych okresów, aby śledzić trendy.",
+        "ha_reports_upload_label": "Wgraj raporty HTML Hybrid Assistant (można od razu kilka)",
+        "ha_reports_limit_caption": "Jednorazowo można wgrać do 100 plików, każdy do 200 MB — to domyślne ograniczenia samego Streamlit.",
+        "ha_reports_loaded_count": "Rozpoznanych raportów: {n}",
+        "ha_reports_parse_error": "⚠️ Nie udało się rozpoznać żadnego z wgranych plików jako raportu Hybrid Assistant.",
+        "ha_reports_hvcheck_note": "ℹ️ Jeśli w raporcie są wyniki testu HV Check (napięcia poszczególnych ogniw), daj znać — wyślij przykład takiego raportu, a dodam automatyczne wyciąganie tych danych do obliczenia SOH, gdy HV Check w samej bazie jest pusty.",
+        "ha_trend_soc_title": "🔋 Skąd bierze się naładowanie baterii",
+        "ha_soc_brakings": "Z rekuperacji przy hamowaniu",
+        "ha_soc_coasting": "Z wybiegu",
+        "ha_soc_ice": "Z silnika spalinowego",
+        "ha_trend_soc_note": "Udział naładowania z każdego źródła, w % całkowitego przyrostu SOC w przejeździe.",
+        "ha_trend_brakings_warn": "⚠️ Udział naładowania z rekuperacji przy hamowaniu maleje (~{value} p.p./mies.) — warto sprawdzić układ hamulcowy i działanie rekuperacji.",
+        "ha_trend_brakings_ok": "Udział naładowania z rekuperacji jest stabilny lub rośnie — nie wykryto oznak zużycia.",
+        "ha_trend_glide_title": "🛞 Indeks wybiegu (Glide) wg raportów",
+        "ha_glide_score": "Glide score",
+        "ha_trend_glide_note": "Indeks wybiegu z oficjalnego obliczenia Hybrid Assistant (dokładna metodologia nie jest ujawniona przez producenta).",
+        "ha_trend_glide_warn": "⚠️ Indeks wybiegu maleje (~{value}/mies.) — możliwy wzrost oporu wewnętrznego przekładni/PSD, warto zwrócić uwagę.",
+        "ha_trend_glide_ok": "Indeks wybiegu jest stabilny lub rośnie — nie wykryto oznak zużycia przekładni.",
+        "ha_trend_driver_title": "👤 Styl jazdy wg raportów",
+        "ha_accel_nervousness": "Nerwowość pedału gazu",
+        "ha_braking_efficiency": "Efektywność hamowań, %",
+        "ha_trend_driver_note": "To dotyczy stylu jazdy, a nie sprawności samochodu — dodatkowy kontekst.",
+        "ha_bsfc_crosscheck_title": "⛽ BSFC wg raportów (weryfikacja z obliczeniem z bazy)",
+        "ha_bsfc_crosscheck_note": "Własne obliczenie BSFC z bazy danych — w zakładce \"Szczegółowe logi\" dla tego samego przejazdu; te wartości powinny być zbliżone.",
         "maintenance_title": "Historia przeglądów technicznych",
         "maintenance_empty": "Brak zapisanych przeglądów.",
         "col_date": "Data",
@@ -563,7 +839,117 @@ def download_database() -> str:
 
 
 # ============================================================
-# РАБОТА С БАЗОЙ ДАННЫХ (SQLite)
+# FUELIO: РЕАЛЬНЫЙ РАСХОД ТОПЛИВА ИЗ ЧЕКОВ АЗС (PDF-ОТЧЁТ)
+# ============================================================
+# В той же папке на Google Диске может лежать PDF-отчёт из приложения
+# Fuelio — учёт реальных заправок (дата, пробег, литры, цена) отдельно
+# по LPG и бензину. В отличие от расхода из hybridassistant.db (который
+# ЭБУ ОЦЕНИВАЕТ по длительности впрыска — это ПРОГНОЗ), здесь литры и
+# стоимость подтверждены чеком на заправке — это РЕАЛЬНЫЙ расход.
+# Показатель расхода для заправки известен только "задним числом" —
+# после СЛЕДУЮЩЕЙ заправки того же вида топлива (Fuelio считает его по
+# пробегу между двумя заправками одного типа).
+
+FUEL_TYPE_PRICE_THRESHOLD = 4.5  # zł/л: ниже — LPG, выше — бензин (проверено на реальном отчёте)
+
+_FUELIO_ENTRY_PATTERN = re.compile(
+    r"(\d{4}-\d{2}-\d{2})\s*\n"
+    r"\s*([\d\s\xa0]+?)\s*km\s*\n"
+    r"\s*([\d,]+)\s*zł\s*\n"
+    r"\s*([\d,]+)\s*zł\s*\n"
+    r"\s*([\d,]+)\s*l\s*\n"
+    r"(?:\s*([\d,]+)\s*l/100km\s*\n)?"
+    r"((?:(?!\d{4}-\d{2}-\d{2}).)*)",
+    re.MULTILINE | re.DOTALL,
+)
+
+
+def _fuelio_to_float(value: "str | None"):
+    if not value:
+        return None
+    cleaned = value.replace("\xa0", "").replace(" ", "").replace(",", ".")
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
+def find_fuel_report_pdfs(folder_path: str) -> list:
+    pdfs = []
+    for root, _dirs, files in os.walk(folder_path):
+        for fname in files:
+            if fname.lower().endswith(".pdf"):
+                pdfs.append(os.path.join(root, fname))
+    return pdfs
+
+
+@st.cache_data(show_spinner=False)
+def parse_fuelio_pdf(file_bytes: bytes) -> pd.DataFrame:
+    """Разбирает PDF-отчёт Fuelio в таблицу заправок. Разбор проверен
+    на реальном отчёте: количество найденных записей, суммы литров и
+    стоимости по видам топлива и диапазон пробега совпали с итоговой
+    статистикой самого отчёта день-в-день."""
+    reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+    text = "\n".join(page.extract_text() or "" for page in reader.pages)
+
+    idx = text.find("Wg roku")
+    section = text[idx:] if idx != -1 else text
+
+    rows = []
+    for m in _FUELIO_ENTRY_PATTERN.finditer(section):
+        date_str, odo, cost, price, liters, consumption, rest = m.groups()
+        try:
+            entry_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        price_f = _fuelio_to_float(price)
+        if price_f is None:
+            continue
+        rabat_match = re.search(r"Rabat:\s*([\d,]+)\s*zł", rest)
+        rows.append(
+            {
+                "date": entry_date,
+                "odo": _fuelio_to_float(odo),
+                "cost": _fuelio_to_float(cost),
+                "price": price_f,
+                "liters": _fuelio_to_float(liters),
+                "consumption_l100": _fuelio_to_float(consumption),
+                "discount": _fuelio_to_float(rabat_match.group(1)) if rabat_match else None,
+                "fuel_type": "lpg" if price_f < FUEL_TYPE_PRICE_THRESHOLD else "petrol",
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def load_fuel_reports(folder_path: str) -> pd.DataFrame:
+    """Скачивает и разбирает все PDF-отчёты Fuelio, найденные в папке
+    на Google Диске, и объединяет их в одну таблицу (на случай, если
+    туда со временем добавят несколько отчётов за разные периоды)."""
+    pdf_paths = find_fuel_report_pdfs(folder_path)
+    if not pdf_paths:
+        return pd.DataFrame()
+
+    frames = []
+    for path in pdf_paths:
+        try:
+            with open(path, "rb") as f:
+                file_bytes = f.read()
+            df = parse_fuelio_pdf(file_bytes)
+            if not df.empty:
+                frames.append(df)
+        except Exception:
+            continue
+
+    if not frames:
+        return pd.DataFrame()
+
+    combined = pd.concat(frames, ignore_index=True)
+    combined = combined.drop_duplicates(subset=["date", "odo", "cost", "liters"])
+    combined["datetime"] = pd.to_datetime(combined["date"])
+    return combined.sort_values("datetime").reset_index(drop=True)
+
+
+
 # ============================================================
 # Все функции принимают file_version (mtime скачанного файла), чтобы
 # кэш Streamlit корректно инвалидировался при каждом новом скачивании
@@ -715,7 +1101,11 @@ def load_trips_full(db_path: str, file_version: float) -> pd.DataFrame:
 
     trips["date"] = _ms_to_local_datetime(trips["TSFIN"])
     trips["distance"] = pd.to_numeric(trips["NKMS"], errors="coerce")
-    trips["duration_min"] = pd.to_numeric(trips["NBSEC"], errors="coerce") / 60.0
+    # NBSEC — вопреки названию, это НЕ секунды, а число замеров за поездку
+    # (проверено на реальном HTML-отчёте Hybrid Assistant: NBSEC совпало
+    # с полем "Samples", а не с реальной длительностью поездки). Реальную
+    # длительность считаем как разницу TSFIN-TSDEB.
+    trips["duration_min"] = (trips["TSFIN"] - trips["TSDEB"]) / 1000.0 / 60.0
 
     fastlog = load_fastlog_full(db_path, file_version)
 
@@ -1145,6 +1535,7 @@ def compute_maintenance_status(
                 "record_found": last_record is not None,
                 "is_lpg_only": is_lpg_only,
                 "km_since_baseline": (current_mileage - baseline_km) if baseline_km is not None else None,
+                "custom_no_record_message_key": item.get("custom_no_record_message_key"),
             }
         )
 
@@ -1433,7 +1824,10 @@ def _render_single_maintenance_item(item: "dict | None", header_label: str) -> N
     prefix = "maint_no_record_lpg" if item.get("is_lpg_only") else "maint_no_record_generic"
 
     if not item.get("record_found", True):
-        if item["status"] == "overdue" and item.get("km_since_baseline") is not None:
+        custom_key = item.get("custom_no_record_message_key")
+        if custom_key:
+            st.warning(t(custom_key))
+        elif item["status"] == "overdue" and item.get("km_since_baseline") is not None:
             st.warning(
                 t(f"{prefix}_overdue").format(
                     km=f"{item['km_since_baseline']:,.0f}".replace(",", " ")
@@ -1473,11 +1867,12 @@ def render_smart_maintenance_cards(status_list: list, lpg_active: bool) -> None:
         "oil": {"ru": "Моторное масло", "pl": "Olej silnikowy"},
         "spark_plugs": {"ru": "Свечи зажигания", "pl": "Świece zapłonowe"},
         "coolant": {"ru": "Антифриз SLLC", "pl": "Płyn chłodniczy SLLC"},
+        "cvt_oil": {"ru": "Масло e-CVT (ATF WS)", "pl": "Olej e-CVT (ATF WS)"},
         "lpg_filters": {"ru": "ГБО: фильтры", "pl": "LPG: filtry"},
         "lpg_valves": {"ru": "ГБО: клапаны", "pl": "LPG: zawory"},
     }
 
-    cols = st.columns(4)
+    cols = st.columns(5)
     with cols[0]:
         _render_single_maintenance_item(by_key.get("oil"), titles["oil"][lang])
     with cols[1]:
@@ -1485,6 +1880,8 @@ def render_smart_maintenance_cards(status_list: list, lpg_active: bool) -> None:
     with cols[2]:
         _render_single_maintenance_item(by_key.get("coolant"), titles["coolant"][lang])
     with cols[3]:
+        _render_single_maintenance_item(by_key.get("cvt_oil"), titles["cvt_oil"][lang])
+    with cols[4]:
         gbo_title = {"ru": "ГБО", "pl": "LPG"}[lang]
         if not lpg_active:
             st.markdown(f"**{gbo_title}**")
@@ -1494,7 +1891,84 @@ def render_smart_maintenance_cards(status_list: list, lpg_active: bool) -> None:
             _render_single_maintenance_item(by_key.get("lpg_valves"), titles["lpg_valves"][lang])
 
 
-def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version):
+def _render_fuel_log_section(fuel_df: pd.DataFrame) -> None:
+    """Блок реального расхода топлива (по чекам Fuelio): последние
+    заправки LPG/бензина и график истории заправок с легендой."""
+    st.subheader(t("fuel_log_title"))
+    if fuel_df.empty:
+        st.info(t("fuel_log_no_data"))
+        return
+
+    today = date.today()
+    col1, col2 = st.columns(2)
+    for col, ftype, label_key in ((col1, "lpg", "fuel_type_lpg"), (col2, "petrol", "fuel_type_petrol")):
+        sub = fuel_df[fuel_df["fuel_type"] == ftype].sort_values("date")
+        with col:
+            st.markdown(f"**{t(label_key)}**")
+            if sub.empty:
+                st.info(t("fuel_log_no_data"))
+                continue
+            last = sub.iloc[-1]
+            days_ago = (today - last["date"]).days
+            st.metric(t("fuel_last_refuel_date"), last["date"].strftime("%Y-%m-%d"))
+            c1, c2 = st.columns(2)
+            c1.metric(t("fuel_liters"), f"{last['liters']:.2f} л")
+            c2.metric(t("fuel_price"), f"{last['price']:.2f} zł/л")
+            st.caption(t("fuel_days_ago").format(days=days_ago))
+
+            if ftype == "lpg":
+                avg_cons = sub["consumption_l100"].dropna().mean()
+                st.metric(
+                    f"{t('fuel_avg_consumption')} {t('fuel_real_badge')}",
+                    f"{avg_cons:.2f} л/100км" if pd.notna(avg_cons) else "—",
+                )
+            else:
+                st.markdown(f"**{t('fuel_avg_consumption')} {t('fuel_real_badge')}**")
+                st.info(t("fuel_petrol_no_avg_note"))
+
+    st.markdown(f"**{t('fuel_trend_title')}**")
+    metric_options = {
+        "days_since_last": t("fuel_metric_days"),
+        "liters": t("fuel_metric_liters"),
+        "cost": t("fuel_metric_cost"),
+    }
+    period_options = {t("map_period_month"): 30, t("map_period_year"): 365}
+
+    c1, c2 = st.columns(2)
+    with c1:
+        selected_metric = st.selectbox(
+            t("fuel_metric_label"), list(metric_options.keys()),
+            format_func=lambda k: metric_options[k], key="fuel_trend_metric",
+        )
+    with c2:
+        selected_period_label = st.selectbox(t("fuel_period_label"), list(period_options.keys()), key="fuel_trend_period")
+    days_back = period_options[selected_period_label]
+
+    plot_df = fuel_df.copy()
+    plot_df["date"] = pd.to_datetime(plot_df["date"])
+    plot_df["days_since_last"] = (
+        plot_df.sort_values("date").groupby("fuel_type")["date"].diff().dt.days
+    )
+    cutoff = today - timedelta(days=days_back)
+    plot_df = plot_df[plot_df["date"] >= pd.Timestamp(cutoff)]
+
+    fig = go.Figure()
+    for ftype, label_key, color in (("lpg", "fuel_type_lpg", "#FF8C00"), ("petrol", "fuel_type_petrol", "#1f77b4")):
+        sub = plot_df[plot_df["fuel_type"] == ftype].sort_values("date")
+        if sub.empty or selected_metric not in sub.columns:
+            continue
+        fig.add_trace(
+            go.Scatter(x=sub["date"], y=sub[selected_metric], name=t(label_key), mode="lines+markers", line=dict(color=color))
+        )
+    if fig.data:
+        fig.update_layout(height=350, yaxis_title=metric_options[selected_metric], legend=dict(orientation="h"))
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info(t("not_enough_data"))
+    st.caption(t("fuel_real_badge_note"))
+
+
+def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, fuel_df):
     if trips_df.empty:
         st.info(t("no_trip_data"))
         return
@@ -1508,8 +1982,9 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version):
     col1.metric(t("metric_total_trips"), f"{total_trips}")
     col2.metric(t("metric_total_distance"), f"{total_distance:,.0f}".replace(",", " "))
     col3.metric(
-        t("metric_avg_consumption"),
+        f"{t('metric_avg_consumption')} {t('fuel_forecast_badge')}",
         f"{avg_consumption:.1f}" if pd.notna(avg_consumption) else "—",
+        help=t("fuel_forecast_help"),
     )
     col4.metric(t("metric_soh"), f"{latest_soh:.0f}%" if latest_soh is not None else "—")
 
@@ -1554,7 +2029,7 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version):
             mcol1.metric(t("metric_total_distance"), f"{sel_row['distance']:.1f}")
             mcol2.metric(t("metric_ev_pct"), f"{ev_pct:.0f}%" if pd.notna(ev_pct) else "—")
             mcol3.metric(t("metric_ice_pct"), f"{ice_pct:.0f}%" if ice_pct is not None else "—")
-            mcol4.metric(t("metric_fuel_ml"), f"{sel_row['fuel_ml']:.0f}" if pd.notna(sel_row.get("fuel_ml")) else "—")
+            mcol4.metric(f"{t('metric_fuel_ml')} {t('fuel_forecast_badge')}", f"{sel_row['fuel_ml']:.0f}" if pd.notna(sel_row.get("fuel_ml")) else "—", help=t("fuel_forecast_help"))
             mcol5.metric(t("metric_brake_events"), f"{int(sel_row['brake_events'])}" if pd.notna(sel_row.get("brake_events")) else "—")
         else:
             st.info(t("no_gps_data"))
@@ -1604,12 +2079,27 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version):
                 st.plotly_chart(grid_fig, use_container_width=True)
                 if pd.notna(period_avg_consumption):
                     st.markdown(
-                        f"### {t('map_period_avg_consumption').format(value=f'{period_avg_consumption:.1f}')}"
+                        f"### {t('map_period_avg_consumption').format(value=f'{period_avg_consumption:.1f}')} {t('fuel_forecast_badge')}"
                     )
+                if freq == "D" and not fuel_df.empty:
+                    day_fuel = fuel_df[fuel_df["date"] == period_start.date()]
+                    for _, frow in day_fuel.iterrows():
+                        fuel_label = t("fuel_type_lpg") if frow["fuel_type"] == "lpg" else t("fuel_type_petrol")
+                        st.success(
+                            t("map_day_refuel_note").format(
+                                fuel=fuel_label,
+                                liters=f"{frow['liters']:.2f}",
+                                price=f"{frow['price']:.2f}",
+                            )
+                        )
             else:
                 st.info(t("no_gps_data"))
     else:
         render_maps_locked_placeholder()
+
+    st.divider()
+
+    _render_fuel_log_section(fuel_df)
 
     st.divider()
 
@@ -1686,6 +2176,491 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version):
     render_smart_maintenance_cards(status_list, lpg_active)
 
 
+def _fmt_hms(seconds: float) -> str:
+    """Форматирует секунды как H:MM:SS (или MM:SS, если меньше часа) —
+    как в отчётах Hybrid Assistant."""
+    if seconds is None or pd.isna(seconds):
+        return "—"
+    seconds = int(round(seconds))
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def _integrate_kwh(timestamps_ms: np.ndarray, power_kw: np.ndarray, sign: str = "all") -> float:
+    """Интегрирует мощность (кВт) по времени (мс) в энергию (кВт·ч).
+    sign="pos"/"neg" — считать только положительные/отрицательные интервалы."""
+    if len(timestamps_ms) < 2:
+        return 0.0
+    dt_h = np.diff(timestamps_ms) / 1000.0 / 3600.0
+    p = power_kw[1:]
+    if sign == "pos":
+        mask = p > 0
+    elif sign == "neg":
+        mask = p < 0
+    else:
+        mask = np.ones_like(p, dtype=bool)
+    return float(np.nansum(p[mask] * dt_h[mask]))
+
+
+def _render_matrix_table(row_labels: list, col_labels: list, data: list) -> None:
+    """Универсальная таблица со значениями (как в отчёте HA): строки —
+    row_labels (Avg/Min/Max...), колонки — col_labels (Current/Voltage...)."""
+    df = pd.DataFrame(data, index=row_labels, columns=col_labels)
+    st.dataframe(df, use_container_width=True)
+
+
+def compute_trip_report(trip_log: pd.DataFrame, trip_row: pd.Series, battlog_probe_log: pd.DataFrame) -> dict:
+    """Считает все показатели детального отчёта по одной поездке на
+    основе реальных колонок FASTLOG. Формулы проверены на реальном
+    HTML-отчёте Hybrid Assistant для контрольной поездки (совпадения
+    почти точные: BSFC, температуры, энергия ВВБ, высота и т.д.)."""
+    df = trip_log.sort_values("TIMESTAMP").reset_index(drop=True)
+    ts = df["TIMESTAMP"].to_numpy()
+    n = len(df)
+    report = {}
+
+    def col(name):
+        return pd.to_numeric(df[name], errors="coerce") if name in df.columns else pd.Series(dtype=float)
+
+    speed = col("SPEED_OBD")
+    ice_rpm = col("ICE_RPM")
+    moving_mask = speed.fillna(0) > 0
+    ev_mask = ice_rpm.fillna(0) == 0
+    fuelflow = col("FUELFLOWH")
+    no_fuel_mask = ev_mask | (fuelflow.fillna(0) == 0)
+
+    total_seconds = (ts[-1] - ts[0]) / 1000.0 if n > 1 else 0.0
+    dt_s = np.diff(ts) / 1000.0 if n > 1 else np.array([])
+
+    def masked_seconds(mask_series):
+        if n < 2:
+            return 0.0
+        m = mask_series.to_numpy()[1:]
+        return float(np.nansum(dt_s[m]))
+
+    report["summary"] = {
+        "start": trip_row["date"] - pd.to_timedelta(total_seconds, unit="s") if False else None,
+        "distance_total": trip_row.get("distance"),
+        "distance_ev": trip_row.get("distance") * (df["TRIP_EV_DIST"].max() / df["TRIP_DIST"].max())
+        if "TRIP_EV_DIST" in df.columns and "TRIP_DIST" in df.columns and pd.notna(df["TRIP_DIST"].max()) and df["TRIP_DIST"].max()
+        else None,
+        "time_total_s": total_seconds,
+        "time_ev_s": masked_seconds(ev_mask),
+        "time_moving_s": masked_seconds(moving_mask),
+        "time_moving_ev_s": masked_seconds(moving_mask & ev_mask),
+        "speed_avg": speed.mean(),
+        "speed_moving_avg": speed[moving_mask].mean() if moving_mask.any() else None,
+        "speed_ev_avg": speed[ev_mask & moving_mask].mean() if (ev_mask & moving_mask).any() else None,
+        "speed_max": speed.max(),
+        "soc_start": col("SOC").iloc[0] if n else None,
+        "soc_end": col("SOC").iloc[-1] if n else None,
+        "ambient_avg": col("AMBIENT_TEMP").mean(),
+        "alt_start": col("GPS_ALT").iloc[0] if n and "GPS_ALT" in df.columns else None,
+        "alt_end": col("GPS_ALT").iloc[-1] if n and "GPS_ALT" in df.columns else None,
+    }
+
+    fuel_ml = col("TRIPFUEL").max() if "TRIPFUEL" in df.columns else None
+    dist = trip_row.get("distance")
+    report["fuel"] = {
+        "consumption_l100": (fuel_ml / 1000.0 / dist * 100.0) if fuel_ml and dist else None,
+        "usage_l": (fuel_ml / 1000.0) if fuel_ml else None,
+    }
+
+    # --- SOC ---
+    soc = col("SOC")
+    report["soc"] = {
+        "avg": soc.mean(), "start": soc.iloc[0] if n else None, "end": soc.iloc[-1] if n else None,
+        "delta": (soc.iloc[-1] - soc.iloc[0]) if n else None, "min": soc.min(), "max": soc.max(), "std": soc.std(),
+    }
+
+    # --- HV Battery ---
+    hv_v, hv_a = col("HV_V"), col("HV_A")
+    hv_pwr_kw = (hv_v * hv_a / 1000.0) if not hv_v.empty else pd.Series(dtype=float)
+    dcl, ccl = col("DCL"), col("CCL")
+    report["hv_levels"] = {
+        "current_avg": hv_a.mean(), "current_min": hv_a.min(), "current_max": hv_a.max(),
+        "voltage_avg": hv_v.mean(), "voltage_min": hv_v.min(), "voltage_max": hv_v.max(),
+    }
+    report["hv_power"] = {
+        "power_avg": hv_pwr_kw.mean(), "power_start": hv_pwr_kw.iloc[0] if n else None,
+        "power_end": hv_pwr_kw.iloc[-1] if n else None, "power_min": hv_pwr_kw.min(), "power_max": hv_pwr_kw.max(),
+        "ccl_avg": ccl.mean(), "ccl_min": ccl.min(), "ccl_max": ccl.max(),
+        "dcl_avg": dcl.mean(), "dcl_min": dcl.min(), "dcl_max": dcl.max(),
+    }
+    from_batt = _integrate_kwh(ts, hv_pwr_kw.to_numpy(), "pos")
+    to_batt = _integrate_kwh(ts, hv_pwr_kw.to_numpy(), "neg")
+    report["hv_energy"] = {
+        "from_battery": from_batt, "to_battery": -to_batt, "balance": (-to_batt) - from_batt,
+        "avg_services_kw": None,
+    }
+
+    # --- Temperature ---
+    report["temperature"] = {
+        label: {
+            "avg": col(colname).mean(), "min": col(colname).min(), "max": col(colname).max(),
+        }
+        for label, colname in [
+            ("ambient", "AMBIENT_TEMP"), ("room", "ROOM_TEMP"), ("coolant", "ICE_TEMP"),
+            ("inverter", "INVERTER_TEMP"), ("mg", "MG_TEMP"),
+        ]
+    }
+
+    # HV battery multi-probe temps (только если есть BATTLOG за этот отрезок)
+    probe_stats = {}
+    if battlog_probe_log is not None and not battlog_probe_log.empty:
+        probe_cols = [c for c in battlog_probe_log.columns if c.startswith("TB")]
+        for c in probe_cols:
+            s = pd.to_numeric(battlog_probe_log[c], errors="coerce")
+            if s.notna().any():
+                probe_stats[c] = {"avg": s.mean(), "min": s.min(), "max": s.max()}
+    report["hv_probes"] = probe_stats
+
+    # --- Elevation ---
+    alt = col("GPS_ALT")
+    if not alt.empty and alt.notna().any():
+        alt_diff = alt.diff().fillna(0)
+        report["elevation"] = {
+            "avg": alt.mean(), "start": alt.iloc[0], "end": alt.iloc[-1],
+            "min": alt.min(), "max": alt.max(),
+            "upward": float(alt_diff[alt_diff > 0].sum()), "downward": float(-alt_diff[alt_diff < 0].sum()),
+            "delta": float(alt.iloc[-1] - alt.iloc[0]),
+        }
+    else:
+        report["elevation"] = None
+
+    # --- Energy from petrol engine ---
+    ice_pwr = col("ICE_PWR")
+    energy_ice_kwh = _integrate_kwh(ts, ice_pwr.to_numpy(), "all") if not ice_pwr.empty else None
+    report["energy_engine"] = {
+        "energy_kwh": energy_ice_kwh,
+        "energy_kwh_100km": (energy_ice_kwh / dist * 100.0) if energy_ice_kwh and dist else None,
+    }
+
+    # --- Engine ---
+    ice_load = col("ICE_LOAD")
+    report["engine"] = {
+        "rpm_avg": ice_rpm.mean(), "rpm_max": ice_rpm.max(),
+        "load_avg": ice_load.mean(), "load_max": ice_load.max(),
+        "power_avg": ice_pwr.mean(), "power_max": ice_pwr.max(),
+    }
+
+    # Ignitions: подъёмы ICE_RPM 0 -> >0, короткие (<5 сек) считаются неэффективными
+    ign_total, ign_ineff = 0, 0
+    if n > 1:
+        running = (ice_rpm.fillna(0) > 0).to_numpy()
+        starts = np.where((~running[:-1]) & running[1:])[0] + 1
+        for s_idx in starts:
+            e_idx = s_idx
+            while e_idx < n - 1 and running[e_idx]:
+                e_idx += 1
+            duration = (ts[e_idx] - ts[s_idx]) / 1000.0
+            ign_total += 1
+            if duration < 5:
+                ign_ineff += 1
+    report["ignitions"] = {"total": ign_total, "inefficient": ign_ineff}
+
+    ice_state_running = masked_seconds(pd.Series(ice_rpm.fillna(0) > 0, index=df.index) & (fuelflow.fillna(0) > 0))
+    ice_state_spinning = masked_seconds(pd.Series(ice_rpm.fillna(0) > 0, index=df.index) & (fuelflow.fillna(0) == 0))
+    ice_state_off = total_seconds - ice_state_running - ice_state_spinning
+    report["engine_state"] = {
+        "running_s": ice_state_running, "spinning_s": ice_state_spinning, "off_s": max(0.0, ice_state_off),
+    }
+
+    ev_dist = report["summary"]["distance_ev"]
+    report["ev_stats"] = {"trip_length": dist, "ev_range": ev_dist}
+
+    # --- PSD (расчётный крутящий момент ДВС из мощности и оборотов) ---
+    ice_torque_est = (ice_pwr * 1000.0) / (ice_rpm.replace(0, np.nan) * 2 * np.pi / 60.0)
+    report["psd"] = {
+        "ice_rpm_avg": ice_rpm.mean(), "ice_rpm_max": ice_rpm.max(),
+        "ice_torque_avg": ice_torque_est.mean(), "ice_torque_max": ice_torque_est.max(),
+        "mg1_rpm_avg": col("MG1_RPM").mean(), "mg1_rpm_max": col("MG1_RPM").max(),
+        "mg2_rpm_avg": col("MG2_RPM").mean(), "mg2_rpm_max": col("MG2_RPM").max(),
+        "mg1_torque_avg": col("MG1_TORQUE").mean(), "mg1_torque_max": col("MG1_TORQUE").max(),
+        "mg2_torque_avg": col("MG2_TORQUE").mean(), "mg2_torque_max": col("MG2_TORQUE").max(),
+    }
+
+    # --- Fuel Trims ---
+    ltft, stft = col("LTFT"), col("STFT")
+    effective = ltft.fillna(0) + stft.fillna(0)
+    report["fuel_trim"] = {
+        "st_avg": stft.mean(), "st_min": stft.min(), "st_max": stft.max(),
+        "lt_avg": ltft.mean(), "lt_min": ltft.min(), "lt_max": ltft.max(),
+        "eff_avg": effective[stft.notna() | ltft.notna()].mean() if (stft.notna() | ltft.notna()).any() else None,
+        "eff_min": effective[stft.notna() | ltft.notna()].min() if (stft.notna() | ltft.notna()).any() else None,
+        "eff_max": effective[stft.notna() | ltft.notna()].max() if (stft.notna() | ltft.notna()).any() else None,
+    }
+
+    # --- BSFC (усредняется только по ненулевым значениям — так же, как в HA) ---
+    bsfc = col("BSFC")
+    bsfc_valid = bsfc[bsfc > 0]
+    report["bsfc"] = {
+        "avg": bsfc_valid.mean() if not bsfc_valid.empty else None,
+        "std": bsfc_valid.std() if not bsfc_valid.empty else None,
+    }
+
+    # --- Braking ---
+    friction = col("BRK_MCYL_TRQ").fillna(0) != 0
+    regen = col("BRK_REG_TRQ").fillna(0) != 0
+    braking_active = friction | regen
+    edges = braking_active.astype(int).diff().fillna(0)
+    brake_starts = df.index[edges == 1].tolist()
+    brake_ends = df.index[edges == -1].tolist()
+    if braking_active.iloc[0]:
+        brake_starts = [0] + brake_starts
+    if braking_active.iloc[-1]:
+        brake_ends = brake_ends + [n - 1]
+
+    good, bad, mixed, longest = 0, 0, 0, 0.0
+    for s_idx, e_idx in zip(brake_starts, brake_ends):
+        seg_friction = friction.iloc[s_idx:e_idx + 1].any()
+        seg_regen = regen.iloc[s_idx:e_idx + 1].any()
+        duration = (ts[e_idx] - ts[s_idx]) / 1000.0
+        longest = max(longest, duration)
+        if seg_regen and seg_friction:
+            mixed += 1
+        elif seg_regen:
+            good += 1
+        elif seg_friction:
+            bad += 1
+
+    total_brakings = good + bad + mixed
+    regen_energy = -_integrate_kwh(ts, hv_pwr_kw.where(regen, 0).to_numpy(), "neg") if not hv_pwr_kw.empty else 0.0
+    report["braking"] = {
+        "total": total_brakings, "good": good, "bad": bad, "mixed": mixed,
+        "efficiency_pct": (good / total_brakings * 100.0) if total_brakings else None,
+        "moving_pct": (masked_seconds(braking_active) / report["summary"]["time_moving_s"] * 100.0)
+        if report["summary"]["time_moving_s"] else None,
+        "longest_s": longest, "energy_recovered_kwh": regen_energy,
+    }
+
+    # --- Driver evaluation ---
+    accel = col("ACCELERATOR")
+    report["driver_eval"] = {
+        "accel_nervousness": accel.diff().abs().mean() if accel.notna().any() else None,
+        "braking_efficiency_pct": report["braking"]["efficiency_pct"],
+        "inefficient_ignitions": ign_ineff, "total_ignitions": ign_total,
+    }
+
+    # --- Glide (по колонке GLIDEINDEX, приблизительно) ---
+    glide = col("GLIDEINDEX")
+    report["glide"] = {
+        "avg": glide.mean() if glide.notna().any() else None,
+        "max": glide.max() if glide.notna().any() else None,
+    }
+
+    return report
+
+
+def render_trip_report_sections(report: dict, lang: str) -> None:
+    """Отрисовывает вычисленный отчёт по секциям (сворачиваемые блоки),
+    как в HTML-отчёте Hybrid Assistant, полностью на выбранном языке."""
+
+    def fmt(v, unit="", digits=1):
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            return "—"
+        return f"{v:,.{digits}f}{unit}".replace(",", " ")
+
+    lbl = {
+        "avg": {"ru": "Среднее", "pl": "Średnia"}, "min": {"ru": "Мин.", "pl": "Min"},
+        "max": {"ru": "Макс.", "pl": "Maks"}, "start": {"ru": "Начало", "pl": "Start"},
+        "end": {"ru": "Конец", "pl": "Koniec"}, "delta": {"ru": "Дельта", "pl": "Delta"},
+        "std": {"ru": "Ст. откл.", "pl": "Odch. std"},
+    }
+    L = lambda k: lbl[k][lang]
+
+    with st.expander(t("rep_summary_title"), expanded=True):
+        s, f = report["summary"], report["fuel"]
+        st.markdown(f"**{t('rep_trip')}**")
+        _render_matrix_table(
+            [t("rep_distance"), t("rep_time"), t("rep_moving")],
+            [t("rep_total"), t("rep_ev"), "%"],
+            [
+                [fmt(s["distance_total"], " km"), fmt(s["distance_ev"], " km"),
+                 fmt((s["distance_ev"] / s["distance_total"] * 100) if s["distance_ev"] and s["distance_total"] else None, "%", 0)],
+                [_fmt_hms(s["time_total_s"]), _fmt_hms(s["time_ev_s"]),
+                 fmt((s["time_ev_s"] / s["time_total_s"] * 100) if s["time_total_s"] else None, "%", 0)],
+                [_fmt_hms(s["time_moving_s"]), _fmt_hms(s["time_moving_ev_s"]),
+                 fmt((s["time_moving_ev_s"] / s["time_moving_s"] * 100) if s["time_moving_s"] else None, "%", 0)],
+            ],
+        )
+        c1, c2, c3 = st.columns(3)
+        c1.metric(t("rep_speed_avg"), fmt(s["speed_avg"], " км/ч", 0))
+        c2.metric(t("rep_speed_max"), fmt(s["speed_max"], " км/ч", 0))
+        c3.metric(t("rep_speed_ev_avg"), fmt(s["speed_ev_avg"], " км/ч", 0))
+        c4, c5, c6 = st.columns(3)
+        c4.metric(t("rep_soc_start_end"), f"{fmt(s['soc_start'], '%', 0)} → {fmt(s['soc_end'], '%', 0)}")
+        c5.metric(t("rep_ambient_avg"), fmt(s["ambient_avg"], " °C", 0))
+        c6.metric(f"{t('rep_fuel_consumption')} {t('fuel_forecast_badge')}", fmt(f["consumption_l100"], " л/100км", 2), help=t("fuel_forecast_help"))
+        st.caption(t("rep_ev_time_note"))
+
+    with st.expander(t("rep_soc_title")):
+        soc = report["soc"]
+        _render_matrix_table(
+            [L("avg"), L("start"), L("end"), L("delta"), L("min"), L("max"), L("std")],
+            ["SOC"],
+            [[fmt(soc[k], "%", 2)] for k in ("avg", "start", "end", "delta", "min", "max", "std")],
+        )
+        st.caption(t("rep_soc_note"))
+
+    with st.expander(t("rep_hv_title")):
+        lv, pw, en = report["hv_levels"], report["hv_power"], report["hv_energy"]
+        st.markdown(f"**{t('rep_hv_levels')}**")
+        _render_matrix_table(
+            [L("avg"), L("min"), L("max")], [t("rep_current"), t("rep_voltage")],
+            [
+                [fmt(lv["current_avg"], " A"), fmt(lv["voltage_avg"], " V", 0)],
+                [fmt(lv["current_min"], " A"), fmt(lv["voltage_min"], " V", 0)],
+                [fmt(lv["current_max"], " A"), fmt(lv["voltage_max"], " V", 0)],
+            ],
+        )
+        st.markdown(f"**{t('rep_hv_power')}**")
+        _render_matrix_table(
+            [L("avg"), L("min"), L("max")], [t("rep_power"), "CCL", "DCL"],
+            [
+                [fmt(pw["power_avg"], " kW", 2), fmt(pw["ccl_avg"], " kW", 1), fmt(pw["dcl_avg"], " kW", 1)],
+                [fmt(pw["power_min"], " kW", 2), fmt(pw["ccl_min"], " kW", 1), fmt(pw["dcl_min"], " kW", 1)],
+                [fmt(pw["power_max"], " kW", 2), fmt(pw["ccl_max"], " kW", 1), fmt(pw["dcl_max"], " kW", 1)],
+            ],
+        )
+        c1, c2, c3 = st.columns(3)
+        c1.metric(t("rep_hv_from_batt"), fmt(en["from_battery"], " kWh", 3))
+        c2.metric(t("rep_hv_to_batt"), fmt(en["to_battery"], " kWh", 3))
+        c3.metric(t("rep_hv_balance"), fmt(en["balance"], " kWh", 3))
+        st.caption(t("rep_ccl_dcl_note"))
+
+    with st.expander(t("rep_temp_title")):
+        temps = report["temperature"]
+        temp_labels = {
+            "ambient": t("rep_temp_ambient"), "room": t("rep_temp_room"), "coolant": t("rep_temp_coolant"),
+            "inverter": t("rep_temp_inverter"), "mg": t("rep_temp_mg"),
+        }
+        _render_matrix_table(
+            [L("avg"), L("min"), L("max")],
+            [temp_labels[k] for k in ("ambient", "room", "coolant", "inverter", "mg")],
+            [
+                [fmt(temps[k]["avg"], " °C", 0) for k in ("ambient", "room", "coolant", "inverter", "mg")],
+                [fmt(temps[k]["min"], " °C", 0) for k in ("ambient", "room", "coolant", "inverter", "mg")],
+                [fmt(temps[k]["max"], " °C", 0) for k in ("ambient", "room", "coolant", "inverter", "mg")],
+            ],
+        )
+        if report["hv_probes"]:
+            st.markdown(f"**{t('rep_hv_probes')}**")
+            probes = report["hv_probes"]
+            names = list(probes.keys())
+            _render_matrix_table(
+                [L("avg"), L("min"), L("max")], names,
+                [
+                    [fmt(probes[k]["avg"], " °C", 0) for k in names],
+                    [fmt(probes[k]["min"], " °C", 0) for k in names],
+                    [fmt(probes[k]["max"], " °C", 0) for k in names],
+                ],
+            )
+        else:
+            st.caption(t("logs_no_battlog"))
+
+    if report["elevation"]:
+        with st.expander(t("rep_elevation_title")):
+            e = report["elevation"]
+            _render_matrix_table(
+                [t("rep_altitude")],
+                [L("avg"), L("start"), L("end"), L("min"), L("max"), t("rep_upward"), t("rep_downward"), L("delta")],
+                [[fmt(e[k], " м", 0) for k in ("avg", "start", "end", "min", "max", "upward", "downward", "delta")]],
+            )
+            st.caption(t("rep_elevation_note"))
+
+    with st.expander(t("rep_energy_title")):
+        ee = report["energy_engine"]
+        c1, c2 = st.columns(2)
+        c1.metric(t("rep_energy_from_ice"), fmt(ee["energy_kwh"], " kWh", 2))
+        c2.metric(t("rep_energy_per_100km"), fmt(ee["energy_kwh_100km"], " kWh/100км", 2))
+
+    with st.expander(t("rep_engine_title")):
+        eng, ign, es = report["engine"], report["ignitions"], report["engine_state"]
+        _render_matrix_table(
+            [L("avg"), L("max")], ["RPM", t("rep_load"), t("rep_power")],
+            [
+                [fmt(eng["rpm_avg"], "", 0), fmt(eng["load_avg"], "%", 0), fmt(eng["power_avg"], " kW", 2)],
+                [fmt(eng["rpm_max"], "", 0), fmt(eng["load_max"], "%", 0), fmt(eng["power_max"], " kW", 2)],
+            ],
+        )
+        c1, c2 = st.columns(2)
+        c1.metric(t("rep_ignitions_total"), ign["total"])
+        c2.metric(t("rep_ignitions_inefficient"), ign["inefficient"])
+        st.caption(t("rep_ignitions_note"))
+        st.markdown(f"**{t('rep_engine_state')}**")
+        total_t = max(report["summary"]["time_total_s"], 1e-6)
+        _render_matrix_table(
+            [t("rep_ice_running"), t("rep_ice_spinning"), t("rep_ice_off")], ["%", t("rep_time")],
+            [
+                [fmt(es["running_s"] / total_t * 100, "%", 0), _fmt_hms(es["running_s"])],
+                [fmt(es["spinning_s"] / total_t * 100, "%", 0), _fmt_hms(es["spinning_s"])],
+                [fmt(es["off_s"] / total_t * 100, "%", 0), _fmt_hms(es["off_s"])],
+            ],
+        )
+        st.caption(t("rep_engine_state_note"))
+
+    with st.expander(t("rep_psd_title")):
+        p = report["psd"]
+        _render_matrix_table(
+            [L("avg"), L("max")],
+            ["ICE RPM", t("rep_ice_torque"), "MG1 RPM", "MG2 RPM", "MG1 Nm", "MG2 Nm"],
+            [
+                [fmt(p["ice_rpm_avg"], "", 0), fmt(p["ice_torque_avg"], " Nm", 0), fmt(p["mg1_rpm_avg"], "", 0),
+                 fmt(p["mg2_rpm_avg"], "", 0), fmt(p["mg1_torque_avg"], "", 0), fmt(p["mg2_torque_avg"], "", 0)],
+                [fmt(p["ice_rpm_max"], "", 0), fmt(p["ice_torque_max"], " Nm", 0), fmt(p["mg1_rpm_max"], "", 0),
+                 fmt(p["mg2_rpm_max"], "", 0), fmt(p["mg1_torque_max"], "", 0), fmt(p["mg2_torque_max"], "", 0)],
+            ],
+        )
+        st.caption(t("rep_psd_note"))
+
+    with st.expander(t("rep_trims_title")):
+        ft = report["fuel_trim"]
+        _render_matrix_table(
+            [L("avg"), L("min"), L("max")], ["STFT", "LTFT", t("rep_effective")],
+            [
+                [fmt(ft["st_avg"], "%", 1), fmt(ft["lt_avg"], "%", 1), fmt(ft["eff_avg"], "%", 1)],
+                [fmt(ft["st_min"], "%", 1), fmt(ft["lt_min"], "%", 1), fmt(ft["eff_min"], "%", 1)],
+                [fmt(ft["st_max"], "%", 1), fmt(ft["lt_max"], "%", 1), fmt(ft["eff_max"], "%", 1)],
+            ],
+        )
+
+    with st.expander(t("rep_bsfc_title")):
+        b = report["bsfc"]
+        c1, c2 = st.columns(2)
+        c1.metric(t("rep_bsfc_avg"), fmt(b["avg"], " g/kWh", 0))
+        c2.metric(t("rep_bsfc_std"), fmt(b["std"], "", 0))
+        st.caption(t("rep_bsfc_note"))
+
+    with st.expander(t("rep_braking_title")):
+        br = report["braking"]
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric(t("rep_brakings_total"), br["total"])
+        c2.metric(t("rep_brakings_good"), br["good"])
+        c3.metric(t("rep_brakings_bad"), br["bad"])
+        c4.metric(t("rep_brakings_mixed"), br["mixed"])
+        c5, c6 = st.columns(2)
+        c5.metric(t("rep_braking_efficiency"), fmt(br["efficiency_pct"], "%", 1))
+        c6.metric(t("rep_energy_recovered"), fmt(br["energy_recovered_kwh"], " kWh", 3))
+        st.caption(t("rep_braking_note"))
+
+    with st.expander(t("rep_driver_eval_title")):
+        de = report["driver_eval"]
+        c1, c2, c3 = st.columns(3)
+        c1.metric(t("rep_accel_nervousness"), fmt(de["accel_nervousness"], "", 2))
+        c2.metric(t("rep_braking_efficiency"), fmt(de["braking_efficiency_pct"], "%", 1))
+        c3.metric(t("rep_ignitions_inefficient"), f"{de['inefficient_ignitions']}/{de['total_ignitions']}")
+        st.caption(t("rep_driver_eval_note"))
+
+    with st.expander(t("rep_glide_title")):
+        g = report["glide"]
+        c1, c2 = st.columns(2)
+        c1.metric(t("rep_glide_avg"), fmt(g["avg"], "", 1))
+        c2.metric(t("rep_glide_max"), fmt(g["max"], "", 1))
+        st.caption(t("rep_glide_note"))
+
+
 def render_tab2(trips_df, fastlog_df, db_path, file_version):
     if trips_df.empty or fastlog_df.empty:
         st.info(t("no_trip_data"))
@@ -1705,71 +2680,100 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
         st.info(t("no_log_data"))
         return
 
-    # 1. Скорость и обороты ДВС
-    st.markdown(f"#### {t('logs_chart_speed_rpm')}")
-    fig1 = go.Figure()
-    fig1.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["SPEED_OBD"], name="Speed (км/ч)", line=dict(color="#1f77b4")))
-    fig1.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["ICE_RPM"], name="ICE RPM", yaxis="y2", line=dict(color="#d62728")))
-    fig1.update_layout(
-        yaxis=dict(title="км/ч"),
-        yaxis2=dict(title="об/мин", overlaying="y", side="right"),
-        height=380,
-        legend=dict(orientation="h"),
-    )
-    st.plotly_chart(fig1, use_container_width=True)
-
-    # 2. Напряжение и ток батареи
-    st.markdown(f"#### {t('logs_chart_hv')}")
-    fig2 = go.Figure()
-    fig2.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["HV_V"], name="HV_V (В)", line=dict(color="#2ca02c")))
-    fig2.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["HV_A"], name="HV_A (А)", yaxis="y2", line=dict(color="#ff7f0e")))
-    fig2.update_layout(
-        yaxis=dict(title="В"),
-        yaxis2=dict(title="А", overlaying="y", side="right"),
-        height=380,
-        legend=dict(orientation="h"),
-    )
-    st.plotly_chart(fig2, use_container_width=True)
-
-    # 3. Температуры
-    st.markdown(f"#### {t('logs_chart_temps')}")
-    fig3 = go.Figure()
-    fig3.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["ICE_TEMP"], name="ДВС", line=dict(color="#d62728")))
-    fig3.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["INVERTER_TEMP"], name="Инвертор", line=dict(color="#ff7f0e")))
-    fig3.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["BATTERY_TEMP"], name="ВВБ (среднее)", line=dict(color="#9467bd")))
+    lang = st.session_state.get("lang", "pl")
 
     battlog = load_battlog_probes(db_path, file_version) if db_path else pd.DataFrame()
+    battlog_probe_log = pd.DataFrame()
     if not battlog.empty:
         probe_mask = (battlog["TIMESTAMP"] >= sel_row["TSDEB"]) & (battlog["TIMESTAMP"] <= sel_row["TSFIN"])
-        probe_log = battlog.loc[probe_mask]
-        probe_cols = [c for c in ["TB1", "TB2", "TB3"] if c in probe_log.columns and probe_log[c].notna().any()]
-        if probe_cols:
-            for c in probe_cols:
-                fig3.add_trace(go.Scatter(x=probe_log["datetime"], y=probe_log[c], name=f"ВВБ {c}", line=dict(dash="dot")))
-            st.caption(t("logs_battlog_note"))
+        battlog_probe_log = battlog.loc[probe_mask]
+
+    report = compute_trip_report(trip_log, sel_row, battlog_probe_log)
+    render_trip_report_sections(report, lang)
+
+    # --- Карта поездки (тот же виджет, что и на вкладке "Аналитика") ---
+    with st.expander(t("rep_maps_title")):
+        if maps_are_unlocked():
+            if trip_log[["GPS_LAT", "GPS_LON"]].dropna().empty:
+                st.info(t("no_gps_data"))
+            else:
+                param_options = {
+                    "mode": t("map_param_mode"),
+                    "braking": t("map_param_braking"),
+                    "speed": t("map_param_speed"),
+                    "soc": t("map_param_soc"),
+                }
+                selected_param = st.selectbox(
+                    t("map_param_label"),
+                    options=list(param_options.keys()),
+                    format_func=lambda k: param_options[k],
+                    key="tab2_map_param_select",
+                )
+                st.plotly_chart(_build_route_map_figure(trip_log, selected_param), use_container_width=True)
+                _render_map_legend(selected_param)
+                if _gps_frozen_ratio(trip_log) > 0.3:
+                    st.warning(t("gps_signal_lost_warning"))
+        else:
+            render_maps_locked_placeholder()
+
+    # --- Подробные посекундные графики ---
+    with st.expander(t("rep_charts_title")):
+        st.markdown(f"#### {t('logs_chart_speed_rpm')}")
+        fig1 = go.Figure()
+        fig1.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["SPEED_OBD"], name="Speed (км/ч)", line=dict(color="#1f77b4")))
+        fig1.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["ICE_RPM"], name="ICE RPM", yaxis="y2", line=dict(color="#d62728")))
+        fig1.update_layout(
+            yaxis=dict(title="км/ч"),
+            yaxis2=dict(title="об/мин", overlaying="y", side="right"),
+            height=380,
+            legend=dict(orientation="h"),
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+
+        st.markdown(f"#### {t('logs_chart_hv')}")
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["HV_V"], name="HV_V (В)", line=dict(color="#2ca02c")))
+        fig2.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["HV_A"], name="HV_A (А)", yaxis="y2", line=dict(color="#ff7f0e")))
+        fig2.update_layout(
+            yaxis=dict(title="В"),
+            yaxis2=dict(title="А", overlaying="y", side="right"),
+            height=380,
+            legend=dict(orientation="h"),
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+        st.markdown(f"#### {t('logs_chart_temps')}")
+        fig3 = go.Figure()
+        fig3.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["ICE_TEMP"], name="ДВС", line=dict(color="#d62728")))
+        fig3.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["INVERTER_TEMP"], name="Инвертор", line=dict(color="#ff7f0e")))
+        fig3.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["BATTERY_TEMP"], name="ВВБ (среднее)", line=dict(color="#9467bd")))
+        if not battlog_probe_log.empty:
+            probe_cols = [c for c in ["TB1", "TB2", "TB3"] if c in battlog_probe_log.columns and battlog_probe_log[c].notna().any()]
+            if probe_cols:
+                for c in probe_cols:
+                    fig3.add_trace(go.Scatter(x=battlog_probe_log["datetime"], y=battlog_probe_log[c], name=f"ВВБ {c}", line=dict(dash="dot")))
+                st.caption(t("logs_battlog_note"))
+            else:
+                st.caption(t("logs_no_battlog"))
         else:
             st.caption(t("logs_no_battlog"))
-    else:
-        st.caption(t("logs_no_battlog"))
+        fig3.update_layout(yaxis=dict(title="°C"), height=380, legend=dict(orientation="h"))
+        st.plotly_chart(fig3, use_container_width=True)
 
-    fig3.update_layout(yaxis=dict(title="°C"), height=380, legend=dict(orientation="h"))
-    st.plotly_chart(fig3, use_container_width=True)
-
-    # 4. MG1/MG2
-    st.markdown(f"#### {t('logs_chart_mg')}")
-    fig4 = go.Figure()
-    fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG1_TORQUE"], name="MG1 момент (Нм)", line=dict(color="#17becf")))
-    fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG2_TORQUE"], name="MG2 момент (Нм)", line=dict(color="#bcbd22")))
-    fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG1_RPM"], name="MG1 об/мин", yaxis="y2", line=dict(color="#17becf", dash="dot")))
-    fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG2_RPM"], name="MG2 об/мин", yaxis="y2", line=dict(color="#bcbd22", dash="dot")))
-    fig4.update_layout(
-        yaxis=dict(title="Нм"),
-        yaxis2=dict(title="об/мин", overlaying="y", side="right"),
-        height=380,
-        legend=dict(orientation="h"),
-    )
-    st.plotly_chart(fig4, use_container_width=True)
-    st.caption(t("logs_mg_note"))
+        st.markdown(f"#### {t('logs_chart_mg')}")
+        fig4 = go.Figure()
+        fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG1_TORQUE"], name="MG1 момент (Нм)", line=dict(color="#17becf")))
+        fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG2_TORQUE"], name="MG2 момент (Нм)", line=dict(color="#bcbd22")))
+        fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG1_RPM"], name="MG1 об/мин", yaxis="y2", line=dict(color="#17becf", dash="dot")))
+        fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG2_RPM"], name="MG2 об/мин", yaxis="y2", line=dict(color="#bcbd22", dash="dot")))
+        fig4.update_layout(
+            yaxis=dict(title="Нм"),
+            yaxis2=dict(title="об/мин", overlaying="y", side="right"),
+            height=380,
+            legend=dict(orientation="h"),
+        )
+        st.plotly_chart(fig4, use_container_width=True)
+        st.caption(t("logs_mg_note"))
 
 
 def render_tab3():
@@ -1860,7 +2864,184 @@ def render_tab3():
         st.info(t("not_enough_data"))
 
 
-def render_tab4(trips_df, temp_df, cell_df):
+# ============================================================
+# HTML-ОТЧЁТЫ HYBRID ASSISTANT (для трендов, которых нет в БД)
+# ============================================================
+# Почти все показатели самого отчёта уже честно вычисляются из
+# hybridassistant.db (см. compute_trip_report) и совпадают с отчётом
+# почти до знака. Но несколько фирменных расчётов Hybrid Assistant НЕ
+# хранятся как отдельные колонки в базе и есть только в готовом виде
+# в HTML-отчёте: разбивка SOC по источникам заряда (рекуперация /
+# накат / ДВС), индекс и тип наката (Glide) и итоговая оценка стиля
+# вождения. Именно их мы вытаскиваем из HTML для отслеживания трендов.
+
+def _ha_section_tables(soup: BeautifulSoup, section_id: str) -> list:
+    """Возвращает все <table> между <h2 id=section_id> и следующим <h2>."""
+    tables = []
+    capturing = False
+    for el in soup.find_all(["h2", "table"]):
+        if el.name == "h2":
+            capturing = el.get("id") == section_id
+            continue
+        if capturing and el.name == "table":
+            tables.append(el)
+    return tables
+
+
+def _ha_table_to_rows(table) -> tuple:
+    """Разбирает одну табличку отчёта HA в (заголовок, {метка: значение})."""
+    title = None
+    data = {}
+    for r in table.find_all("tr"):
+        cells = [c.get_text(strip=True) for c in r.find_all(["th", "td"])]
+        if not cells:
+            continue
+        if len(cells) == 1:
+            title = cells[0]
+        elif len(cells) == 2:
+            data[cells[0]] = cells[1]
+        else:
+            data[cells[0]] = cells[1:]
+    return title, data
+
+
+def _parse_pct(value: "str | None"):
+    if value is None:
+        return None
+    try:
+        return float(str(value).replace("%", "").strip())
+    except ValueError:
+        return None
+
+
+@st.cache_data(show_spinner=False)
+def parse_ha_html_report(file_bytes: bytes) -> dict:
+    """Извлекает из HTML-отчёта Hybrid Assistant показатели, которых
+    нет как отдельных колонок в hybridassistant.db (разбивка SOC по
+    источникам заряда, Glide, оценка стиля вождения), плюс BSFC для
+    сверки с расчётом из базы."""
+    soup = BeautifulSoup(file_bytes, "html.parser")
+    result = {}
+
+    for table in soup.find_all("table"):
+        title, data = _ha_table_to_rows(table)
+        if title == "Info":
+            result["odometer"] = data.get("Odometer")
+            break
+
+    for table in _ha_section_tables(soup, "summary"):
+        title, data = _ha_table_to_rows(table)
+        if title == "Time":
+            for key, dest in (("Start", "start"), ("Finish", "finish")):
+                try:
+                    result[dest] = datetime.strptime(data.get(key, ""), "%d/%m/%Y %H:%M:%S")
+                except ValueError:
+                    pass
+
+    for table in _ha_section_tables(soup, "socstats"):
+        title, data = _ha_table_to_rows(table)
+        if title == "Variations":
+            result["soc_gained_brakings"] = _parse_pct(data.get("SOC gained from brakings"))
+            result["soc_gained_coasting"] = _parse_pct(data.get("SOC gained from coasting"))
+            result["soc_charged_by_ice"] = _parse_pct(data.get("SOC charged by ICE"))
+
+    for table in _ha_section_tables(soup, "glide"):
+        title, data = _ha_table_to_rows(table)
+        if "Glide score" in data or "Glide type" in data:
+            result["glide_type"] = data.get("Glide type")
+            try:
+                result["glide_score"] = float(data.get("Glide score"))
+            except (TypeError, ValueError):
+                pass
+
+    for table in _ha_section_tables(soup, "eval"):
+        title, data = _ha_table_to_rows(table)
+        if "Accelerator Nervousness" in data:
+            try:
+                result["accel_nervousness"] = float(data.get("Accelerator Nervousness"))
+            except (TypeError, ValueError):
+                pass
+            result["braking_efficiency"] = _parse_pct(data.get("Braking Efficiency"))
+            ineff = data.get("Inefficient Ignitions", "")
+            if "/" in str(ineff):
+                try:
+                    num, den = str(ineff).split("/")
+                    result["inefficient_ignitions"] = int(num)
+                    result["total_ignitions"] = int(den)
+                except ValueError:
+                    pass
+
+    for table in _ha_section_tables(soup, "bsfc"):
+        title, data = _ha_table_to_rows(table)
+        if title == "BSFC":
+            try:
+                result["bsfc_avg_report"] = float(data.get("Average"))
+            except (TypeError, ValueError):
+                pass
+
+    return result
+
+
+def load_ha_reports(uploaded_files) -> pd.DataFrame:
+    records = []
+    for uf in uploaded_files or []:
+        try:
+            data = parse_ha_html_report(uf.getvalue())
+        except Exception:
+            continue
+        if "finish" in data:
+            data = dict(data)
+            data["filename"] = uf.name
+            records.append(data)
+    if not records:
+        return pd.DataFrame()
+    return pd.DataFrame(records).sort_values("finish").reset_index(drop=True)
+
+
+def _render_password_gate(
+    namespace: str, secret_key: str, fallback_hash: str, unlocked_flag: str, widget_key_prefix: "str | None" = None
+) -> bool:
+    """Универсальный UI-гейт по паролю (хеш + защита от подбора).
+    namespace/unlocked_flag определяют состояние защиты (общее, если
+    вызывается из нескольких мест с одинаковым namespace — один пароль
+    разблокирует все такие места сразу в этой сессии). widget_key_prefix
+    даёт виджетам уникальные ключи для каждого места вызова, чтобы
+    Streamlit не ругался на повторяющиеся key при рендере нескольких
+    вкладок за один прогон скрипта.
+    Возвращает True, если доступ уже разблокирован в этой сессии —
+    тогда вызывающий код рисует защищённый контент дальше. Если
+    возвращает False, весь нужный UI (запрос пароля/блокировка/ошибка)
+    уже отрисован, и вызывающий код должен просто ничего больше не
+    показывать в этом месте."""
+    key_prefix = widget_key_prefix or namespace
+    remaining = _lockout_remaining_seconds(namespace)
+    if remaining > 0:
+        minutes, seconds = divmod(remaining, 60)
+        st.error(t("password_locked").format(minutes=minutes, seconds=seconds))
+        return False
+
+    if not st.session_state.get(unlocked_flag, False):
+        password_input = st.text_input(
+            t("password_label"), type="password", key=f"{key_prefix}_password_input"
+        )
+        if password_input == "":
+            st.info(t("password_needed"))
+        elif _verify_secret(password_input, secret_key, fallback_hash):
+            _register_successful_unlock(namespace, unlocked_flag)
+            st.rerun()
+        else:
+            attempts_left = _register_failed_attempt(namespace)
+            st.error(t("password_wrong").format(attempts_left=attempts_left))
+        return False
+
+    st.success(t("password_unlocked"))
+    if st.button(t("lock_again_button"), key=f"{key_prefix}_lock_again"):
+        st.session_state[unlocked_flag] = False
+        st.rerun()
+    return True
+
+
+def render_tab4(trips_df, temp_df, cell_df, fuel_df):
     st.markdown(f"#### {t('compare_table_title')}")
 
     dr_files = st.session_state.get("drprius_uploader")
@@ -1998,6 +3179,143 @@ def render_tab4(trips_df, temp_df, cell_df):
     else:
         st.info(t("not_enough_data"))
 
+    # --- Fuelio: реальный расход LPG во времени (по чекам АЗС) ---
+    st.divider()
+    st.subheader(t("fuel_trend_health_title"))
+    if fuel_df.empty:
+        st.info(t("fuel_log_no_data"))
+    else:
+        lpg_df = fuel_df[(fuel_df["fuel_type"] == "lpg") & fuel_df["consumption_l100"].notna()].sort_values("date")
+        if len(lpg_df) >= 3:
+            fig = go.Figure(
+                go.Scatter(x=lpg_df["date"], y=lpg_df["consumption_l100"], mode="lines+markers", name=t("fuel_type_lpg"))
+            )
+            fig.update_layout(height=300, yaxis_title="л/100км")
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption(t("fuel_real_badge_note"))
+
+            x = (pd.to_datetime(lpg_df["date"]) - pd.to_datetime(lpg_df["date"]).min()).dt.total_seconds().to_numpy()
+            slope_per_month = np.polyfit(x, lpg_df["consumption_l100"].to_numpy(), 1)[0] * 86400 * 30
+            if slope_per_month > 0.3:
+                st.warning(t("fuel_lpg_trend_warn").format(value=f"{slope_per_month:.2f}"))
+            else:
+                st.success(t("fuel_lpg_trend_ok"))
+        else:
+            st.info(t("not_enough_data"))
+
+        # Сверка: прогноз ЭБУ (из базы) vs реальный расход (по чекам), по месяцам
+        if not trips_df.empty and "consumption" in trips_df.columns:
+            db_monthly = trips_df.dropna(subset=["consumption"]).copy()
+            db_monthly["month"] = db_monthly["date"].dt.strftime("%Y-%m")
+            db_monthly = db_monthly.groupby("month")["consumption"].mean().reset_index()
+
+            fuel_monthly = fuel_df[fuel_df["consumption_l100"].notna()].copy()
+            fuel_monthly["month"] = pd.to_datetime(fuel_monthly["date"]).dt.strftime("%Y-%m")
+            fuel_monthly = fuel_monthly.groupby(["month", "fuel_type"])["consumption_l100"].mean().reset_index()
+
+            if not db_monthly.empty and not fuel_monthly.empty:
+                st.markdown(f"**{t('fuel_crosscheck_title')}**")
+                fig2 = go.Figure()
+                fig2.add_trace(go.Scatter(x=db_monthly["month"], y=db_monthly["consumption"], name=f"{t('rep_fuel_consumption')} {t('fuel_forecast_badge')}", mode="lines+markers"))
+                for ftype, label_key in (("lpg", "fuel_type_lpg"), ("petrol", "fuel_type_petrol")):
+                    sub = fuel_monthly[fuel_monthly["fuel_type"] == ftype]
+                    if not sub.empty:
+                        fig2.add_trace(go.Scatter(x=sub["month"], y=sub["consumption_l100"], name=f"{t(label_key)} {t('fuel_real_badge')}", mode="lines+markers"))
+                fig2.update_layout(height=320, yaxis_title="л/100км", legend=dict(orientation="h"))
+                st.plotly_chart(fig2, use_container_width=True)
+                st.caption(t("fuel_crosscheck_note"))
+
+    # --- HTML-отчёты Hybrid Assistant: доп. тренды, которых нет в БД ---
+    st.divider()
+    st.subheader(t("ha_reports_title"))
+    st.caption(t("ha_reports_explainer"))
+
+    if not _render_password_gate(
+        "maintenance", "maintenance_password_hash", _FALLBACK_PASSWORD_HASH, "maintenance_unlocked",
+        widget_key_prefix="ha_reports",
+    ):
+        return
+
+    st.file_uploader(
+        t("ha_reports_upload_label"),
+        type=["html", "htm"],
+        accept_multiple_files=True,
+        key="ha_reports_uploader",
+    )
+    st.caption(t("ha_reports_limit_caption"))
+
+    ha_files = st.session_state.get("ha_reports_uploader")
+    if not ha_files:
+        return
+
+    reports_df = load_ha_reports(ha_files)
+    if reports_df.empty:
+        st.warning(t("ha_reports_parse_error"))
+        return
+
+    st.caption(t("ha_reports_loaded_count").format(n=len(reports_df)))
+
+    lang = st.session_state.get("lang", "pl")
+
+    def _trend_check(series: pd.Series, dates: pd.Series, warn_key: str, ok_key: str, min_points: int = 3):
+        valid = series.dropna()
+        if len(valid) < min_points:
+            st.info(t("not_enough_data"))
+            return
+        x = (dates.loc[valid.index] - dates.loc[valid.index].min()).dt.total_seconds().to_numpy()
+        slope = np.polyfit(x, valid.to_numpy(), 1)[0]
+        slope_per_month = slope * 86400 * 30
+        if slope_per_month < 0:
+            st.warning(t(warn_key).format(value=f"{abs(slope_per_month):.2f}"))
+        else:
+            st.success(t(ok_key))
+
+    with st.expander(t("ha_trend_soc_title"), expanded=True):
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=reports_df["finish"], y=reports_df.get("soc_gained_brakings"), name=t("ha_soc_brakings"), mode="lines+markers"))
+        fig.add_trace(go.Scatter(x=reports_df["finish"], y=reports_df.get("soc_gained_coasting"), name=t("ha_soc_coasting"), mode="lines+markers"))
+        fig.add_trace(go.Scatter(x=reports_df["finish"], y=reports_df.get("soc_charged_by_ice"), name=t("ha_soc_ice"), mode="lines+markers"))
+        fig.update_layout(height=320, yaxis_title="%")
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption(t("ha_trend_soc_note"))
+        if "soc_gained_brakings" in reports_df.columns:
+            _trend_check(reports_df["soc_gained_brakings"], reports_df["finish"], "ha_trend_brakings_warn", "ha_trend_brakings_ok")
+
+    with st.expander(t("ha_trend_glide_title")):
+        if "glide_score" in reports_df.columns:
+            fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["glide_score"], mode="lines+markers"))
+            fig.update_layout(height=300, yaxis_title=t("ha_glide_score"))
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption(t("ha_trend_glide_note"))
+            _trend_check(reports_df["glide_score"], reports_df["finish"], "ha_trend_glide_warn", "ha_trend_glide_ok")
+        else:
+            st.info(t("not_enough_data"))
+
+    with st.expander(t("ha_trend_driver_title")):
+        c1, c2 = st.columns(2)
+        with c1:
+            if "accel_nervousness" in reports_df.columns:
+                fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["accel_nervousness"], mode="lines+markers"))
+                fig.update_layout(height=280, yaxis_title=t("ha_accel_nervousness"))
+                st.plotly_chart(fig, use_container_width=True)
+        with c2:
+            if "braking_efficiency" in reports_df.columns:
+                fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["braking_efficiency"], mode="lines+markers"))
+                fig.update_layout(height=280, yaxis_title=t("ha_braking_efficiency"))
+                st.plotly_chart(fig, use_container_width=True)
+        st.caption(t("ha_trend_driver_note"))
+
+    with st.expander(t("ha_bsfc_crosscheck_title")):
+        if "bsfc_avg_report" in reports_df.columns:
+            fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["bsfc_avg_report"], mode="lines+markers", name="BSFC (отчёт HA)"))
+            fig.update_layout(height=280, yaxis_title="g/kWh")
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption(t("ha_bsfc_crosscheck_note"))
+        else:
+            st.info(t("not_enough_data"))
+
+    st.caption(t("ha_reports_hvcheck_note"))
+
 
 def render_tab5(db_path, file_version):
     st.subheader(t("maintenance_title"))
@@ -2026,6 +3344,7 @@ def render_tab5(db_path, file_version):
         "brake_fluid": {"ru": "Тормозная жидкость", "pl": "Płyn hamulcowy"},
         "coolant": {"ru": "Антифриз SLLC", "pl": "Płyn chłodniczy SLLC"},
         "air_filter": {"ru": "Воздушный фильтр", "pl": "Filtr powietrza"},
+        "cvt_oil": {"ru": "Масло e-CVT (ATF WS)", "pl": "Olej e-CVT (ATF WS)"},
         "lpg_filters": {"ru": "Фильтры ГБО", "pl": "Filtry LPG"},
         "lpg_valves": {"ru": "Зазоры клапанов (ГБО)", "pl": "Luzy zaworowe (LPG)"},
     }
@@ -2068,28 +3387,11 @@ def render_tab5(db_path, file_version):
     else:
         st.caption(t("invoice_unavailable"))
 
-    remaining = _lockout_remaining_seconds("maintenance")
-    if remaining > 0:
-        minutes, seconds = divmod(remaining, 60)
-        st.error(t("password_locked").format(minutes=minutes, seconds=seconds))
+    if not _render_password_gate(
+        "maintenance", "maintenance_password_hash", _FALLBACK_PASSWORD_HASH, "maintenance_unlocked",
+        widget_key_prefix="maintenance_form",
+    ):
         return
-
-    if not st.session_state.get("maintenance_unlocked", False):
-        password_input = st.text_input(t("password_label"), type="password", key="maintenance_password_input")
-        if password_input == "":
-            st.info(t("password_needed"))
-        elif _verify_secret(password_input, "maintenance_password_hash", _FALLBACK_PASSWORD_HASH):
-            _register_successful_unlock("maintenance", "maintenance_unlocked")
-            st.rerun()
-        else:
-            attempts_left = _register_failed_attempt("maintenance")
-            st.error(t("password_wrong").format(attempts_left=attempts_left))
-        return
-
-    st.success(t("password_unlocked"))
-    if st.button(t("lock_again_button")):
-        st.session_state["maintenance_unlocked"] = False
-        st.rerun()
 
     prefill_date = st.session_state.get("invoice_prefill_date")
     try:
@@ -2143,6 +3445,7 @@ def main():
     fastlog_df = pd.DataFrame()
     temp_df = pd.DataFrame()
     cell_df = pd.DataFrame()
+    fuel_df = pd.DataFrame()
     db_ok = True
     db_missing = False
     db_error_message = None
@@ -2178,11 +3481,16 @@ def main():
             db_ok = False
             db_error_message = str(e)
 
+        try:
+            fuel_df = load_fuel_reports(LOCAL_DB_FOLDER_PATH)
+        except Exception:
+            fuel_df = pd.DataFrame()
+
     with tab1:
         if not db_ok:
             st.warning(t("db_missing")) if db_missing else st.error(t("db_error").format(error=db_error_message))
         else:
-            render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version)
+            render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, fuel_df)
 
     with tab2:
         if not db_ok:
@@ -2197,7 +3505,7 @@ def main():
         if not db_ok:
             st.warning(t("db_missing")) if db_missing else st.error(t("db_error").format(error=db_error_message))
         else:
-            render_tab4(trips_df, temp_df, cell_df)
+            render_tab4(trips_df, temp_df, cell_df, fuel_df)
 
     with tab5:
         render_tab5(db_path, file_version)
