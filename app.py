@@ -262,7 +262,7 @@ def download_database() -> str:
         except OSError:
             pass
 
-    gdown.download(id=GDRIVE_FILE_ID, output=output_path, quiet=True, fuzzy=True)
+    gdown.download(id=GDRIVE_FILE_ID, output=output_path, quiet=True)
 
     if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
         raise RuntimeError(
