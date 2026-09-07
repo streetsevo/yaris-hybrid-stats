@@ -252,6 +252,13 @@ TR = {
         "soh_forecast_title": "Прогноз остатка ресурса ВВБ до критической дельты (0.20В)",
         "soh_forecast_result": "При текущей динамике критическая дельта ожидается примерно через {days} дн. ({date}).",
         "soh_forecast_stable": "Дельта напряжений стабильна или уменьшается — угрозы в обозримом будущем не выявлено.",
+        "soh_no_data_hint": "Для расчёта прогноза ВВБ выполните тест HV Check в приложении на телефоне и обновите базу данных.",
+        "maint_forecast_title": "🧰 Прогноз по регламентным работам",
+        "maint_gbo_not_installed": "ГБО ещё не установлено (устанавливается на пробеге 117 000 км).",
+        "maint_no_record_generic_remaining": "Запись о замене не найдена в журнале. Расчёт ведётся от 2021 года выпуска автомобиля и пробега 0 км. По регламенту осталось: {km} км.",
+        "maint_no_record_generic_overdue": "Запись о замене не найдена в журнале. Расчёт ведётся от 2021 года выпуска автомобиля и пробега 0 км. Замена пропущена — пробег без замены: {km} км.",
+        "maint_no_record_lpg_remaining": "Запись о замене не найдена в журнале. Расчёт ведётся от точки установки ГБО (пробег 117 000 км). По регламенту осталось: {km} км.",
+        "maint_no_record_lpg_overdue": "Запись о замене не найдена в журнале. Расчёт ведётся от точки установки ГБО (пробег 117 000 км). Замена пропущена — пробег без замены: {km} км.",
         "radiator_forecast_title": "Прогноз загрязнения радиаторов (тренд температур относительно уличной)",
         "radiator_forecast_result": "Разница температура инвертора/ДВС минус уличная растёт на ~{value}°C в месяц — стоит присмотреться к радиаторам.",
         "radiator_forecast_stable": "Разница температур относительно уличной стабильна — признаков забивания радиаторов не выявлено.",
@@ -383,6 +390,13 @@ TR = {
         "soh_forecast_title": "Prognoza zasobu baterii HV do krytycznej delty (0.20V)",
         "soh_forecast_result": "Przy obecnej dynamice krytyczna delta oczekiwana za ok. {days} dni ({date}).",
         "soh_forecast_stable": "Delta napięć jest stabilna lub maleje — nie wykryto zagrożenia w najbliższym czasie.",
+        "soh_no_data_hint": "Aby obliczyć prognozę baterii HV, wykonaj test HV Check w aplikacji na telefonie i zaktualizuj bazę danych.",
+        "maint_forecast_title": "🧰 Prognoza przeglądów okresowych",
+        "maint_gbo_not_installed": "LPG jeszcze nie zamontowano (montaż przy przebiegu 117 000 km).",
+        "maint_no_record_generic_remaining": "Nie znaleziono wpisu o wymianie w dzienniku. Obliczenia liczone są od 2021 roku produkcji auta i przebiegu 0 km. Pozostało wg harmonogramu: {km} km.",
+        "maint_no_record_generic_overdue": "Nie znaleziono wpisu o wymianie w dzienniku. Obliczenia liczone są od 2021 roku produkcji auta i przebiegu 0 km. Wymiana przeoczona — przebieg bez wymiany: {km} km.",
+        "maint_no_record_lpg_remaining": "Nie znaleziono wpisu o wymianie w dzienniku. Obliczenia liczone są od momentu montażu LPG (przebieg 117 000 km). Pozostało wg harmonogramu: {km} km.",
+        "maint_no_record_lpg_overdue": "Nie znaleziono wpisu o wymianie w dzienniku. Obliczenia liczone są od momentu montażu LPG (przebieg 117 000 km). Wymiana przeoczona — przebieg bez wymiany: {km} km.",
         "radiator_forecast_title": "Prognoza zabrudzenia chłodnic (trend temperatur względem otoczenia)",
         "radiator_forecast_result": "Różnica temperatury falownika/silnika minus otoczenie rośnie o ~{value}°C miesięcznie — warto sprawdzić chłodnice.",
         "radiator_forecast_stable": "Różnica temperatur względem otoczenia jest stabilna — brak oznak zabrudzenia chłodnic.",
@@ -514,6 +528,25 @@ def _table_exists(db_path: str, table_name: str, file_version: float) -> bool:
         return cur.fetchone() is not None
 
 
+def _normalize_gps_coordinate(series: pd.Series) -> pd.Series:
+    """Некоторые версии/экспорты Hybrid Assistant хранят GPS-координаты
+    как целые числа, умноженные на 10 000 000 (например, 518445630
+    вместо 51.8445630) — это стандартный формат Android "E7". Другие
+    экспорты уже хранят готовые градусы (51.844563). Чтобы карта
+    работала независимо от конкретного экспорта, определяем формат по
+    типичной величине значений: настоящие широта/долгота по модулю не
+    превышают 180, а "сырой" формат ×10^7 даёт значения порядка
+    десятков-сотен миллионов — их делим на 10 000 000.0. Если координаты
+    уже в разумном диапазоне, оставляем как есть."""
+    numeric = pd.to_numeric(series, errors="coerce")
+    sample = numeric.dropna()
+    if sample.empty:
+        return numeric
+    if sample.abs().median() > 1000:  # похоже на "сырой" формат ×10^7
+        return numeric / 10_000_000.0
+    return numeric
+
+
 @st.cache_data(show_spinner=False)
 def load_fastlog_full(db_path: str, file_version: float) -> pd.DataFrame:
     """Читает FASTLOG целиком и добавляет производные колонки:
@@ -532,6 +565,10 @@ def load_fastlog_full(db_path: str, file_version: float) -> pd.DataFrame:
     numeric_cols = [c for c in df.columns if c not in ("TIMESTAMP", "datetime")]
     for c in numeric_cols:
         df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    for gps_col in ("GPS_LAT", "GPS_LON"):
+        if gps_col in df.columns:
+            df[gps_col] = _normalize_gps_coordinate(df[gps_col])
 
     df["mode"] = np.where(df["ICE_RPM"].fillna(0) > 0, "ICE", "EV")
     df["friction_braking_active"] = df["BRK_MCYL_TRQ"].fillna(0) != 0
@@ -991,6 +1028,9 @@ def compute_maintenance_status(
                 "remaining_days": remaining_days,
                 "status": status,
                 "oil_adjustment_pct": oil_adjustment_pct if item.get("smart_oil_forecast") else None,
+                "record_found": last_record is not None,
+                "is_lpg_only": is_lpg_only,
+                "km_since_baseline": (current_mileage - baseline_km) if baseline_km is not None else None,
             }
         )
 
@@ -1145,7 +1185,7 @@ def _build_route_map_figure(trip_log: pd.DataFrame) -> go.Figure:
     if points.empty:
         return fig
 
-    color_map = {"EV": "#0057FF", "ICE": "#111111"}
+    color_map = {"EV": "#0066FF", "ICE": "#000000"}
     seg_start = 0
     for i in range(1, len(points) + 1):
         if i == len(points) or points.loc[i, "mode"] != points.loc[seg_start, "mode"]:
@@ -1175,7 +1215,88 @@ def _build_route_map_figure(trip_log: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def render_tab1(trips_df, fastlog_df, temp_df, cell_df):
+def _render_single_maintenance_item(item: "dict | None", header_label: str) -> None:
+    """Отображает одну карточку регламентного пункта. Работает даже
+    если журнал ТО пуст: в этом случае явно пишет, что запись не
+    найдена, и всё равно считает остаток от 2021 года/0 км (или от
+    точки установки ГБО для пунктов ГБО)."""
+    if item is None:
+        st.markdown(f"**{header_label}**")
+        st.info(t("maint_gbo_not_installed"))
+        return
+
+    status_icon = {
+        "overdue": t("maintenance_status_overdue"),
+        "soon": t("maintenance_status_soon"),
+        "ok": t("maintenance_status_ok"),
+    }[item["status"]]
+    st.markdown(f"**{header_label}** — {status_icon}")
+
+    prefix = "maint_no_record_lpg" if item.get("is_lpg_only") else "maint_no_record_generic"
+
+    if not item.get("record_found", True):
+        if item["status"] == "overdue" and item.get("km_since_baseline") is not None:
+            st.warning(
+                t(f"{prefix}_overdue").format(
+                    km=f"{item['km_since_baseline']:,.0f}".replace(",", " ")
+                )
+            )
+        elif item.get("remaining_km") is not None:
+            st.info(
+                t(f"{prefix}_remaining").format(
+                    km=f"{item['remaining_km']:,.0f}".replace(",", " ")
+                )
+            )
+        else:
+            st.info(t(f"{prefix}_remaining").format(km="—"))
+    else:
+        parts = []
+        if item.get("remaining_km") is not None:
+            parts.append(
+                t("maintenance_status_km_left").format(
+                    km=f"{item['remaining_km']:,.0f}".replace(",", " ")
+                )
+            )
+        if item.get("remaining_days") is not None:
+            parts.append(t("maintenance_status_days_left").format(days=item["remaining_days"]))
+        if parts:
+            st.caption(" · ".join(parts))
+
+    if item.get("oil_adjustment_pct"):
+        st.caption(t("smart_oil_hint").format(pct=item["oil_adjustment_pct"]))
+
+
+def render_smart_maintenance_cards(status_list: list, lpg_active: bool) -> None:
+    """Карточки прогноза по маслу/свечам/антифризу/ГБО в блоке Smart
+    Diagnostics — отображаются ВСЕГДА, даже если журнал ТО пуст."""
+    lang = st.session_state.get("lang", "pl")
+    by_key = {item["key"]: item for item in status_list}
+    titles = {
+        "oil": {"ru": "Моторное масло", "pl": "Olej silnikowy"},
+        "spark_plugs": {"ru": "Свечи зажигания", "pl": "Świece zapłonowe"},
+        "coolant": {"ru": "Антифриз SLLC", "pl": "Płyn chłodniczy SLLC"},
+        "lpg_filters": {"ru": "ГБО: фильтры", "pl": "LPG: filtry"},
+        "lpg_valves": {"ru": "ГБО: клапаны", "pl": "LPG: zawory"},
+    }
+
+    cols = st.columns(4)
+    with cols[0]:
+        _render_single_maintenance_item(by_key.get("oil"), titles["oil"][lang])
+    with cols[1]:
+        _render_single_maintenance_item(by_key.get("spark_plugs"), titles["spark_plugs"][lang])
+    with cols[2]:
+        _render_single_maintenance_item(by_key.get("coolant"), titles["coolant"][lang])
+    with cols[3]:
+        gbo_title = {"ru": "ГБО", "pl": "LPG"}[lang]
+        if not lpg_active:
+            st.markdown(f"**{gbo_title}**")
+            st.info(t("maint_gbo_not_installed"))
+        else:
+            _render_single_maintenance_item(by_key.get("lpg_filters"), titles["lpg_filters"][lang])
+            _render_single_maintenance_item(by_key.get("lpg_valves"), titles["lpg_valves"][lang])
+
+
+def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version):
     if trips_df.empty:
         st.info(t("no_trip_data"))
         return
@@ -1302,22 +1423,30 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df):
     dcol1, dcol2 = st.columns(2)
     with dcol1:
         st.markdown(f"**{t('soh_forecast_title')}**")
-        if not cell_df.empty and len(cell_df) >= 5:
-            x = (cell_df["timestamp"] - cell_df["timestamp"].min()).dt.total_seconds().to_numpy()
-            y = cell_df["cell_delta"].to_numpy()
+        valid_cell_df = (
+            cell_df.dropna(subset=["cell_delta"]).loc[cell_df["cell_delta"] != 0]
+            if not cell_df.empty
+            else cell_df
+        )
+        if len(valid_cell_df) >= 5:
+            x = (valid_cell_df["timestamp"] - valid_cell_df["timestamp"].min()).dt.total_seconds().to_numpy()
+            y = valid_cell_df["cell_delta"].to_numpy()
             slope, intercept = np.polyfit(x, y, 1)
             if slope > 0:
                 seconds_to_critical = (SOH_DELTA_MAX - intercept) / slope - x.max()
                 if seconds_to_critical > 0:
                     days = int(seconds_to_critical / 86400)
-                    forecast_date = (cell_df["timestamp"].max() + timedelta(seconds=seconds_to_critical)).strftime("%Y-%m-%d")
+                    forecast_date = (valid_cell_df["timestamp"].max() + timedelta(seconds=seconds_to_critical)).strftime("%Y-%m-%d")
                     st.warning(t("soh_forecast_result").format(days=days, date=forecast_date))
                 else:
                     st.warning(t("soh_forecast_result").format(days=0, date=t("not_enough_data")))
             else:
                 st.success(t("soh_forecast_stable"))
         else:
-            st.info(t("not_enough_data"))
+            # Дельта напряжений пуста/полностью нулевая (BATTLOG/HVCHECKCELL
+            # не заполнены) — вместо общей фразы "недостаточно данных"
+            # даём конкретную инструкцию, что нужно сделать пользователю.
+            st.info(t("soh_no_data_hint"))
     with dcol2:
         st.markdown(f"**{t('radiator_forecast_title')}**")
         if not temp_df.empty and "ambient_temp" in temp_df.columns and len(temp_df) >= 20:
@@ -1336,6 +1465,11 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df):
                 st.info(t("not_enough_data"))
         else:
             st.info(t("not_enough_data"))
+
+    st.markdown(f"**{t('maint_forecast_title')}**")
+    records = load_maintenance()
+    status_list, _current_mileage, lpg_active = compute_maintenance_status(db_path, file_version, records)
+    render_smart_maintenance_cards(status_list, lpg_active)
 
 
 def render_tab2(trips_df, fastlog_df, db_path, file_version):
@@ -1834,7 +1968,7 @@ def main():
         if not db_ok:
             st.warning(t("db_missing")) if db_missing else st.error(t("db_error").format(error=db_error_message))
         else:
-            render_tab1(trips_df, fastlog_df, temp_df, cell_df)
+            render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version)
 
     with tab2:
         if not db_ok:
