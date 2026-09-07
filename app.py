@@ -1962,7 +1962,7 @@ def _render_fuel_log_section(fuel_df: pd.DataFrame) -> None:
         )
     if fig.data:
         fig.update_layout(height=350, yaxis_title=metric_options[selected_metric], legend=dict(orientation="h"))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key="tab1_fuel_trend_chart")
     else:
         st.info(t("not_enough_data"))
     st.caption(t("fuel_real_badge_note"))
@@ -2018,7 +2018,7 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
                     format_func=lambda k: param_options[k],
                     key="map_param_select",
                 )
-                st.plotly_chart(_build_route_map_figure(trip_log, selected_param), use_container_width=True)
+                st.plotly_chart(_build_route_map_figure(trip_log, selected_param), use_container_width=True, key="tab1_route_map")
                 _render_map_legend(selected_param)
                 if _gps_frozen_ratio(trip_log) > 0.3:
                     st.warning(t("gps_signal_lost_warning"))
@@ -2076,7 +2076,7 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
                     margin=dict(l=0, r=0, t=0, b=0),
                     height=400,
                 )
-                st.plotly_chart(grid_fig, use_container_width=True)
+                st.plotly_chart(grid_fig, use_container_width=True, key="tab1_period_map")
                 if pd.notna(period_avg_consumption):
                     st.markdown(
                         f"### {t('map_period_avg_consumption').format(value=f'{period_avg_consumption:.1f}')} {t('fuel_forecast_badge')}"
@@ -2203,11 +2203,11 @@ def _integrate_kwh(timestamps_ms: np.ndarray, power_kw: np.ndarray, sign: str = 
     return float(np.nansum(p[mask] * dt_h[mask]))
 
 
-def _render_matrix_table(row_labels: list, col_labels: list, data: list) -> None:
+def _render_matrix_table(row_labels: list, col_labels: list, data: list, key: str) -> None:
     """Универсальная таблица со значениями (как в отчёте HA): строки —
     row_labels (Avg/Min/Max...), колонки — col_labels (Current/Voltage...)."""
     df = pd.DataFrame(data, index=row_labels, columns=col_labels)
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df, use_container_width=True, key=key)
 
 
 def compute_trip_report(trip_log: pd.DataFrame, trip_row: pd.Series, battlog_probe_log: pd.DataFrame) -> dict:
@@ -2484,6 +2484,7 @@ def render_trip_report_sections(report: dict, lang: str) -> None:
                 [_fmt_hms(s["time_moving_s"]), _fmt_hms(s["time_moving_ev_s"]),
                  fmt((s["time_moving_ev_s"] / s["time_moving_s"] * 100) if s["time_moving_s"] else None, "%", 0)],
             ],
+            key="matrix_table_1",
         )
         c1, c2, c3 = st.columns(3)
         c1.metric(t("rep_speed_avg"), fmt(s["speed_avg"], " км/ч", 0))
@@ -2501,6 +2502,7 @@ def render_trip_report_sections(report: dict, lang: str) -> None:
             [L("avg"), L("start"), L("end"), L("delta"), L("min"), L("max"), L("std")],
             ["SOC"],
             [[fmt(soc[k], "%", 2)] for k in ("avg", "start", "end", "delta", "min", "max", "std")],
+            key="matrix_table_2",
         )
         st.caption(t("rep_soc_note"))
 
@@ -2514,6 +2516,7 @@ def render_trip_report_sections(report: dict, lang: str) -> None:
                 [fmt(lv["current_min"], " A"), fmt(lv["voltage_min"], " V", 0)],
                 [fmt(lv["current_max"], " A"), fmt(lv["voltage_max"], " V", 0)],
             ],
+            key="matrix_table_3",
         )
         st.markdown(f"**{t('rep_hv_power')}**")
         _render_matrix_table(
@@ -2523,6 +2526,7 @@ def render_trip_report_sections(report: dict, lang: str) -> None:
                 [fmt(pw["power_min"], " kW", 2), fmt(pw["ccl_min"], " kW", 1), fmt(pw["dcl_min"], " kW", 1)],
                 [fmt(pw["power_max"], " kW", 2), fmt(pw["ccl_max"], " kW", 1), fmt(pw["dcl_max"], " kW", 1)],
             ],
+            key="matrix_table_4",
         )
         c1, c2, c3 = st.columns(3)
         c1.metric(t("rep_hv_from_batt"), fmt(en["from_battery"], " kWh", 3))
@@ -2544,6 +2548,7 @@ def render_trip_report_sections(report: dict, lang: str) -> None:
                 [fmt(temps[k]["min"], " °C", 0) for k in ("ambient", "room", "coolant", "inverter", "mg")],
                 [fmt(temps[k]["max"], " °C", 0) for k in ("ambient", "room", "coolant", "inverter", "mg")],
             ],
+            key="matrix_table_5",
         )
         if report["hv_probes"]:
             st.markdown(f"**{t('rep_hv_probes')}**")
@@ -2556,6 +2561,7 @@ def render_trip_report_sections(report: dict, lang: str) -> None:
                     [fmt(probes[k]["min"], " °C", 0) for k in names],
                     [fmt(probes[k]["max"], " °C", 0) for k in names],
                 ],
+                key="matrix_table_6",
             )
         else:
             st.caption(t("logs_no_battlog"))
@@ -2567,6 +2573,7 @@ def render_trip_report_sections(report: dict, lang: str) -> None:
                 [t("rep_altitude")],
                 [L("avg"), L("start"), L("end"), L("min"), L("max"), t("rep_upward"), t("rep_downward"), L("delta")],
                 [[fmt(e[k], " м", 0) for k in ("avg", "start", "end", "min", "max", "upward", "downward", "delta")]],
+                key="matrix_table_7",
             )
             st.caption(t("rep_elevation_note"))
 
@@ -2584,6 +2591,7 @@ def render_trip_report_sections(report: dict, lang: str) -> None:
                 [fmt(eng["rpm_avg"], "", 0), fmt(eng["load_avg"], "%", 0), fmt(eng["power_avg"], " kW", 2)],
                 [fmt(eng["rpm_max"], "", 0), fmt(eng["load_max"], "%", 0), fmt(eng["power_max"], " kW", 2)],
             ],
+            key="matrix_table_8",
         )
         c1, c2 = st.columns(2)
         c1.metric(t("rep_ignitions_total"), ign["total"])
@@ -2598,6 +2606,7 @@ def render_trip_report_sections(report: dict, lang: str) -> None:
                 [fmt(es["spinning_s"] / total_t * 100, "%", 0), _fmt_hms(es["spinning_s"])],
                 [fmt(es["off_s"] / total_t * 100, "%", 0), _fmt_hms(es["off_s"])],
             ],
+            key="matrix_table_9",
         )
         st.caption(t("rep_engine_state_note"))
 
@@ -2612,6 +2621,7 @@ def render_trip_report_sections(report: dict, lang: str) -> None:
                 [fmt(p["ice_rpm_max"], "", 0), fmt(p["ice_torque_max"], " Nm", 0), fmt(p["mg1_rpm_max"], "", 0),
                  fmt(p["mg2_rpm_max"], "", 0), fmt(p["mg1_torque_max"], "", 0), fmt(p["mg2_torque_max"], "", 0)],
             ],
+            key="matrix_table_10",
         )
         st.caption(t("rep_psd_note"))
 
@@ -2624,6 +2634,7 @@ def render_trip_report_sections(report: dict, lang: str) -> None:
                 [fmt(ft["st_min"], "%", 1), fmt(ft["lt_min"], "%", 1), fmt(ft["eff_min"], "%", 1)],
                 [fmt(ft["st_max"], "%", 1), fmt(ft["lt_max"], "%", 1), fmt(ft["eff_max"], "%", 1)],
             ],
+            key="matrix_table_11",
         )
 
     with st.expander(t("rep_bsfc_title")):
@@ -2709,7 +2720,7 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
                     format_func=lambda k: param_options[k],
                     key="tab2_map_param_select",
                 )
-                st.plotly_chart(_build_route_map_figure(trip_log, selected_param), use_container_width=True)
+                st.plotly_chart(_build_route_map_figure(trip_log, selected_param), use_container_width=True, key="tab2_route_map")
                 _render_map_legend(selected_param)
                 if _gps_frozen_ratio(trip_log) > 0.3:
                     st.warning(t("gps_signal_lost_warning"))
@@ -2728,7 +2739,7 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
             height=380,
             legend=dict(orientation="h"),
         )
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, use_container_width=True, key="tab2_chart_speed_rpm")
 
         st.markdown(f"#### {t('logs_chart_hv')}")
         fig2 = go.Figure()
@@ -2740,7 +2751,7 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
             height=380,
             legend=dict(orientation="h"),
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, use_container_width=True, key="tab2_chart_hv")
 
         st.markdown(f"#### {t('logs_chart_temps')}")
         fig3 = go.Figure()
@@ -2758,7 +2769,7 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
         else:
             st.caption(t("logs_no_battlog"))
         fig3.update_layout(yaxis=dict(title="°C"), height=380, legend=dict(orientation="h"))
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, use_container_width=True, key="tab2_chart_temps")
 
         st.markdown(f"#### {t('logs_chart_mg')}")
         fig4 = go.Figure()
@@ -2772,7 +2783,7 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
             height=380,
             legend=dict(orientation="h"),
         )
-        st.plotly_chart(fig4, use_container_width=True)
+        st.plotly_chart(fig4, use_container_width=True, key="tab2_chart_mg")
         st.caption(t("logs_mg_note"))
 
 
@@ -2814,13 +2825,13 @@ def render_tab3():
         st.markdown(f"#### {t('drprius_resistance_chart')}")
         fig_r = go.Figure(go.Bar(x=[f"#{b}" for b in block_nums], y=resistances, marker_color="#ff7f0e"))
         fig_r.update_layout(height=350)
-        st.plotly_chart(fig_r, use_container_width=True)
+        st.plotly_chart(fig_r, use_container_width=True, key="tab3_resistance_chart")
 
     if any(v is not None for v in voltages):
         st.markdown(f"#### {t('drprius_voltage_chart')}")
         fig_v = go.Figure(go.Bar(x=[f"#{b}" for b in block_nums], y=voltages, marker_color="#2ca02c"))
         fig_v.update_layout(height=350)
-        st.plotly_chart(fig_v, use_container_width=True)
+        st.plotly_chart(fig_v, use_container_width=True, key="tab3_voltage_chart")
 
     st.divider()
     st.markdown(f"#### {t('drprius_wear_title')}")
@@ -3150,12 +3161,12 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
         soh_series = cell_df["cell_delta"].apply(calculate_soh)
         fig_soh = go.Figure(go.Scatter(x=cell_df["timestamp"], y=soh_series, mode="lines+markers"))
         fig_soh.update_layout(height=300, yaxis_title="SOH %")
-        st.plotly_chart(fig_soh, use_container_width=True)
+        st.plotly_chart(fig_soh, use_container_width=True, key="tab4_soh_trend")
 
         st.markdown(f"#### {t('compare_trend_delta')}")
         fig_delta = go.Figure(go.Scatter(x=cell_df["timestamp"], y=cell_df["cell_delta"], mode="lines+markers"))
         fig_delta.update_layout(height=300, yaxis_title="Delta, В")
-        st.plotly_chart(fig_delta, use_container_width=True)
+        st.plotly_chart(fig_delta, use_container_width=True, key="tab4_delta_trend")
     else:
         st.info(t("no_cell_data"))
 
@@ -3175,7 +3186,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
                 sub = pivot[pivot["year"] == yr]
                 fig_season.add_trace(go.Scatter(x=sub["month_num"], y=sub["battery_temp"], name=str(yr), mode="lines+markers"))
             fig_season.update_layout(height=300, xaxis_title="Месяц", yaxis_title="°C ВВБ")
-            st.plotly_chart(fig_season, use_container_width=True)
+            st.plotly_chart(fig_season, use_container_width=True, key="tab4_seasonal_chart")
     else:
         st.info(t("not_enough_data"))
 
@@ -3191,7 +3202,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
                 go.Scatter(x=lpg_df["date"], y=lpg_df["consumption_l100"], mode="lines+markers", name=t("fuel_type_lpg"))
             )
             fig.update_layout(height=300, yaxis_title="л/100км")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="tab4_fuel_lpg_trend")
             st.caption(t("fuel_real_badge_note"))
 
             x = (pd.to_datetime(lpg_df["date"]) - pd.to_datetime(lpg_df["date"]).min()).dt.total_seconds().to_numpy()
@@ -3222,7 +3233,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
                     if not sub.empty:
                         fig2.add_trace(go.Scatter(x=sub["month"], y=sub["consumption_l100"], name=f"{t(label_key)} {t('fuel_real_badge')}", mode="lines+markers"))
                 fig2.update_layout(height=320, yaxis_title="л/100км", legend=dict(orientation="h"))
-                st.plotly_chart(fig2, use_container_width=True)
+                st.plotly_chart(fig2, use_container_width=True, key="tab4_fuel_crosscheck")
                 st.caption(t("fuel_crosscheck_note"))
 
     # --- HTML-отчёты Hybrid Assistant: доп. тренды, которых нет в БД ---
@@ -3276,7 +3287,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
         fig.add_trace(go.Scatter(x=reports_df["finish"], y=reports_df.get("soc_gained_coasting"), name=t("ha_soc_coasting"), mode="lines+markers"))
         fig.add_trace(go.Scatter(x=reports_df["finish"], y=reports_df.get("soc_charged_by_ice"), name=t("ha_soc_ice"), mode="lines+markers"))
         fig.update_layout(height=320, yaxis_title="%")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key="tab4_ha_soc_trend")
         st.caption(t("ha_trend_soc_note"))
         if "soc_gained_brakings" in reports_df.columns:
             _trend_check(reports_df["soc_gained_brakings"], reports_df["finish"], "ha_trend_brakings_warn", "ha_trend_brakings_ok")
@@ -3285,7 +3296,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
         if "glide_score" in reports_df.columns:
             fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["glide_score"], mode="lines+markers"))
             fig.update_layout(height=300, yaxis_title=t("ha_glide_score"))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="tab4_ha_glide_trend")
             st.caption(t("ha_trend_glide_note"))
             _trend_check(reports_df["glide_score"], reports_df["finish"], "ha_trend_glide_warn", "ha_trend_glide_ok")
         else:
@@ -3297,19 +3308,19 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
             if "accel_nervousness" in reports_df.columns:
                 fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["accel_nervousness"], mode="lines+markers"))
                 fig.update_layout(height=280, yaxis_title=t("ha_accel_nervousness"))
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True, key="tab4_ha_accel_nervousness")
         with c2:
             if "braking_efficiency" in reports_df.columns:
                 fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["braking_efficiency"], mode="lines+markers"))
                 fig.update_layout(height=280, yaxis_title=t("ha_braking_efficiency"))
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True, key="tab4_ha_braking_efficiency")
         st.caption(t("ha_trend_driver_note"))
 
     with st.expander(t("ha_bsfc_crosscheck_title")):
         if "bsfc_avg_report" in reports_df.columns:
             fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["bsfc_avg_report"], mode="lines+markers", name="BSFC (отчёт HA)"))
             fig.update_layout(height=280, yaxis_title="g/kWh")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="tab4_ha_bsfc_crosscheck")
             st.caption(t("ha_bsfc_crosscheck_note"))
         else:
             st.info(t("not_enough_data"))
