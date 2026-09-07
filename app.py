@@ -1180,7 +1180,13 @@ def extract_invoice_data(image_bytes: bytes, mime_type: str) -> dict:
     )
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        # gemini-1.5-flash и gemini-2.0-flash полностью отключены Google
+        # (2026 год), а gemini-2.5-flash планово отключается 16 октября
+        # 2026. Используем официальный "плавающий" алиас gemini-flash-latest,
+        # который Google сам переключает на актуальную модель — это
+        # избавляет от необходимости вручную менять имя модели каждый раз,
+        # когда очередная версия снимается с поддержки.
+        model = genai.GenerativeModel("gemini-flash-latest")
         response = model.generate_content(
             [prompt, {"mime_type": mime_type, "data": image_bytes}]
         )
