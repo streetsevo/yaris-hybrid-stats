@@ -1,109 +1,192 @@
 # -*- coding: utf-8 -*-
 """
-Toyota Yaris 4 Hybrid (2021) — Панель диагностики / Panel diagnostyczny
-Источник данных: hybridassistant.db (SQLite, приложение Hybrid Assistant),
-скачивается автоматически с Google Диска при запуске приложения.
+Toyota Yaris 4 Hybrid (2021) — Полная панель диагностики и ТО
+================================================================
+Источники данных:
+  1. hybridassistant.db (SQLite, приложение Hybrid Assistant) —
+     скачивается автоматически с Google Диска при запуске.
+  2. Ежемесячные CSV-логи Dr. Prius — загружаются вручную админом
+     через st.file_uploader на вкладке "Мониторинг Dr. Prius".
+  3. maintenance.json — локальный журнал ТО (создаётся автоматически).
 
-Разверни на Streamlit Community Cloud: положи этот файл и requirements.txt
-в репозиторий на GitHub. Саму базу данных .db в репозиторий загружать
-НЕ нужно — она скачивается с Google Диска по ссылке ниже (GDRIVE_FILE_ID).
+Разверни на Streamlit Community Cloud: положи этот файл и
+requirements.txt в репозиторий на GitHub. Саму базу hybridassistant.db
+в репозиторий загружать НЕ нужно — она скачивается с Google Диска.
 
-Схема БД (проверена на реальном файле hybridassistant.db):
-  TRIPS       (TSDEB, TSFIN, NBSEC, NKMS)              — сводка по поездкам
-  FASTLOG     (TIMESTAMP, TRIPFUEL(мл), ICE_TEMP,
-               INVERTER_TEMP, BATTERY_TEMP, ...)        — подробная телеметрия
-  BATTLOG     (TIMESTAMP, CELL_01..CELL_19, ...)        — поблочные напряжения (если включено HighSpeedLogging)
-  HVCHECKCELL (TIMESTAMP, ELEMENT, VALUE)                — поблочные напряжения во время процедуры HV Check
-TSDEB/TSFIN/TIMESTAMP хранятся в миллисекундах Unix-времени.
-TRIPFUEL обнуляется в начале каждой поездки и накапливается в миллилитрах.
+============================== СХЕМА БД =========================
+Проверена на реальном файле hybridassistant.db:
+
+  TRIPS   (TSDEB, TSFIN, NBSEC, NKMS) — сводка по поездкам,
+           TSDEB/TSFIN в мс Unix-времени, NKMS — пробег поездки в км.
+
+  TRIPINFO (TIMESTAMP=TSFIN, NUMBRAKES, NUMBADBRAKES, NUMHALFBRAKES,
+            ICE_KWH, KWHPOS, KWHNEG, REGENKWH, ...) — агрегаты по
+            поездке от самого Hybrid Assistant.
+
+  FASTLOG (TIMESTAMP, ODO, SPEED_OBD, GPS_LAT, GPS_LON, GPS_SPEED,
+           HV_V, HV_A, SOC, ICE_TEMP, ICE_RPM, ICE_LOAD, BRK_REG_TRQ,
+           BRK_MCYL_TRQ, TRIP_DIST, TRIP_EV_DIST, LTFT, STFT,
+           TRIPFUEL(мл), FUELFLOWH, INVERTER_TEMP, BATTERY_TEMP,
+           MG_TEMP, AMBIENT_TEMP, MG1_RPM, MG1_TORQUE, MG2_RPM,
+           MG2_TORQUE, MGR_RPM, MGR_TORQUE, ...) — посекундная
+           телеметрия. Это основной источник данных для карт,
+           графиков и экспертных параметров.
+           ВАЖНО: BRK_MCYL_TRQ — крутящий момент главного тормозного
+           цилиндра (механическое/фрикционное торможение колодками),
+           BRK_REG_TRQ — момент рекуперативного торможения. У Hybrid
+           Assistant нет отдельных PID для фазных токов MG1/MG2 —
+           доступны только обороты и крутящий момент.
+
+  BATTLOG (TIMESTAMP, CELL_01..CELL_19, TB1..TB8, AMP, SOC) —
+           поблочные напряжения и до 8 датчиков температуры ВВБ.
+           Заполняется только если в настройках Hybrid Assistant
+           включён HighSpeedLogging (по умолчанию выключен).
+
+  HVCHECK / HVCHECKCELL / HVCHECKTEMPERATURE (TIMESTAMP, ELEMENT,
+           VALUE) — данные отдельной процедуры "HV Check".
+
+TRIPFUEL обнуляется в начале каждой поездки и накапливается в мл.
+Нет PID для сопротивления изоляции ВВБ — Hybrid Assistant этот
+параметр не считывает, поэтому соответствующий индикатор безопасности
+показывается честно как "нет данных", а не выдумывается.
+==================================================================
 """
 
 import hashlib
 import hmac
+import io
 import json
 import os
+import re
 import sqlite3
 import time
-from datetime import date
+from datetime import date, datetime, timedelta
 
 import gdown
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+
+try:
+    import google.generativeai as genai
+
+    GENAI_AVAILABLE = True
+except ImportError:
+    GENAI_AVAILABLE = False
+
 
 # ============================================================
 # КОНФИГУРАЦИЯ
 # ============================================================
 
-# --- Источник базы данных: Google Диск ---
-# ID файла взят из ссылки:
-# https://drive.google.com/file/d/1VrS5Kh-a1lh_P-FWNMyolVeigenI6dLa/view
-# ВАЖНО: у файла на Google Диске должен быть включён доступ по ссылке
-# ("Все, у кого есть ссылка" → "Читатель"), иначе скачивание не сработает.
+# --- Источник основной базы данных: Google Диск ---
 GDRIVE_FILE_ID = "1VrS5Kh-a1lh_P-FWNMyolVeigenI6dLa"
-
-# Локальный путь во временном хранилище контейнера, куда база
-# скачивается при запуске. Это НЕ файл из репозитория — он создаётся
-# заново при каждом холодном старте приложения (и по кнопке "Обновить").
 LOCAL_DB_CACHE_PATH = "/tmp/hybridassistant_downloaded.db"
-
-# Как долго переиспользовать уже скачанную копию базы, прежде чем
-# скачать её заново автоматически (в секундах). Это не мешает кнопке
-# "Обновить базу данных" в боковой панели скачать файл немедленно.
-DB_CACHE_TTL_SECONDS = 30 * 60  # 30 минут
+DB_CACHE_TTL_SECONDS = 30 * 60  # 30 минут между автоматическими обновлениями
 
 MAINTENANCE_FILE = "maintenance.json"
+DR_PRIUS_UPLOAD_DIR = "/tmp/dr_prius_logs"
 
-# --- Защита формы добавления записей ТО ---
-# Пароль НИКОГДА не хранится в коде в открытом виде (код лежит в
-# публичном репозитории GitHub!). Вместо этого хранится и сравнивается
-# только SHA-256 хеш пароля.
-#
-# Хеш ниже — это запасной вариант "из коробки" для пароля ALPzqmfg1029
-# (сгенерирован один раз локально командой:
-#   python3 -c "import hashlib; print(hashlib.sha256('ALPzqmfg1029'.encode()).hexdigest())"
-# ), но правильный способ — задать свой хеш через Secrets в настройках
-# Streamlit Community Cloud (Settings → Secrets), тогда он вообще не
-# попадёт в git-репозиторий:
-#
-#   maintenance_password_hash = "ваш_хеш_сюда"
-#
-# Чтобы получить хеш для своего пароля, выполни ту же команду, подставив
-# свой пароль вместо ALPzqmfg1029, и скопируй результат в Secrets.
-_FALLBACK_PASSWORD_HASH = (
-    "b3ff0fc30e7ac18f4fc1b8c492379aeeeb7b3cf840bb00d3f1248a8a6854ad6c"
-)
+# --- Защита формы ТО и кода доступа к картам ---
+# Секреты НИКОГДА не хранятся в коде в открытом виде — только их
+# SHA-256 хеши. Реальные значения задаются через st.secrets:
+#   maintenance_password_hash = "..."
+#   map_access_code_hash = "..."
+# Хеши ниже — запасной вариант "из коробки" для пароля ALPzqmfg1029
+# и кода 95-100 (сгенерированы командой:
+#   python3 -c "import hashlib; print(hashlib.sha256('ЗНАЧЕНИЕ'.encode()).hexdigest())" )
+_FALLBACK_PASSWORD_HASH = "b3ff0fc30e7ac18f4fc1b8c492379aeeeb7b3cf840bb00d3f1248a8a6854ad6c"
+_FALLBACK_MAP_CODE_HASH = "80f71f5ee58fee5ad5ccb7d31d125818580dbefecbbe8e6ed43b674c717b242b"
 
-# --- Защита кода доступа к картам (код "95-100") ---
-# По той же схеме: в коде хранится только SHA-256 хеш, реальный код
-# нигде не фигурирует в открытом виде. Хеш ниже соответствует коду
-# "95-100" (сгенерирован той же командой, что и для пароля выше, с
-# заменой пароля на 95-100). Чтобы задать свой код без изменения кода
-# приложения — пропиши хеш в Secrets:
-#
-#   map_access_code_hash = "ваш_хеш_сюда"
-_FALLBACK_MAP_CODE_HASH = (
-    "80f71f5ee58fee5ad5ccb7d31d125818580dbefecbbe8e6ed43b674c717b242b"
-)
+MAX_PASSWORD_ATTEMPTS = 5   # попыток до временной блокировки (для пароля ТО И кода карт)
+LOCKOUT_SECONDS = 5 * 60    # длительность блокировки, сек
 
-# Общие настройки защиты от подбора (применяются и к паролю ТО, и к
-# коду доступа к картам — независимо друг от друга, у каждого свой
-# счётчик попыток).
-MAX_PASSWORD_ATTEMPTS = 5       # попыток до временной блокировки
-LOCKOUT_SECONDS = 5 * 60        # длительность блокировки, сек
-
-# Пороговые значения перегрева
+# --- Пороговые значения перегрева ---
 INVERTER_TEMP_LIMIT = 75.0  # °C
 ENGINE_TEMP_LIMIT = 95.0    # °C
 
-# Диапазон дельты напряжений ВВБ под нагрузкой для расчёта SOH
-SOH_DELTA_MIN = 0.02  # В  -> 100% здоровья
-SOH_DELTA_MAX = 0.20  # В  -> 0% здоровья
+# --- Диапазон дельты напряжений ВВБ для расчёта SOH ---
+SOH_DELTA_MIN = 0.02  # В -> 100% здоровья
+SOH_DELTA_MAX = 0.20  # В -> 0% здоровья
 
-# Порог "разумного" количества точек для температурного графика:
-# при большем числе строк FASTLOG усредняем по минутным интервалам,
-# чтобы график оставался быстрым и читаемым.
+# --- LTFT (долговременная топливная коррекция) ---
+LTFT_WARNING_MIN = -8.0
+LTFT_WARNING_MAX = 8.0
+
+# --- Расхождения между HA и Dr. Prius, при которых значение красим красным ---
+SOH_DIFF_THRESHOLD = 3.0       # процентных пунктов
+DELTA_V_DIFF_THRESHOLD = 0.03  # вольт
+
+# --- ГБО ---
+LPG_INSTALL_ODO_KM = 117_000
+CAR_MANUFACTURE_YEAR = 2021
+
+# Паспортная (справочная, не измеренная) ёмкость NiMH-модулей Yaris/Aqua.
+# Показывается как ориентир завода-изготовителя, а не как измерение.
+FACTORY_AH_CAPACITY_REFERENCE = 6.5  # Ah
+
+# Порог для усреднения температурного графика (иначе Plotly будет тормозить)
 TEMP_CHART_RESAMPLE_THRESHOLD = 5000
+
+# --- Интервалы ТО ---
+# lpg_km/lpg_years — интервал ПОСЛЕ установки ГБО (если None — как до ГБО).
+# lpg_only — пункт появляется только после установки ГБО.
+# first_at_km — для lpg_only-пунктов: пробег первого обслуживания
+# отсчитывается не от точки установки ГБО + интервал, а задан явно.
+MAINTENANCE_ITEMS = [
+    {
+        "key": "oil",
+        "km": 15_000, "years": 1,
+        "lpg_km": 15_000, "lpg_years": 1,
+        "smart_oil_forecast": True,
+        "keywords": ["масло", "olej", "oil", "0w-16", "0w16"],
+    },
+    {
+        "key": "spark_plugs",
+        "km": 90_000, "years": None,
+        "lpg_km": 45_000, "lpg_years": None,
+        "keywords": ["свеч", "świec", "swiec", "plug"],
+    },
+    {
+        "key": "brake_fluid",
+        "km": 30_000, "years": 2,
+        "lpg_km": 30_000, "lpg_years": 2,
+        "keywords": ["тормозн", "hamulc", "brake fluid", "dot"],
+    },
+    {
+        "key": "coolant",
+        "km": 150_000, "years": 5,
+        "lpg_km": 150_000, "lpg_years": 5,
+        "keywords": ["антифриз", "охлажда", "chłodz", "chlodz", "coolant", "sllc"],
+    },
+    {
+        "key": "air_filter",
+        "km": 45_000, "years": 3,
+        "lpg_km": 45_000, "lpg_years": 3,
+        "keywords": ["воздушн", "powietrz", "air filter"],
+    },
+    {
+        "key": "lpg_filters",
+        "km": None, "years": None,
+        "lpg_km": 15_000, "lpg_years": None,
+        "lpg_only": True,
+        "keywords": ["гбо фильтр", "filtr gazu", "lpg filter", "фильтр газа"],
+    },
+    {
+        "key": "lpg_valves",
+        "km": None, "years": None,
+        "lpg_km": 45_000, "lpg_years": None,
+        "lpg_only": True,
+        "first_at_km": 162_000,
+        "keywords": ["клапан", "zawor", "zawór", "valve clearance", "зазор клапан"],
+    },
+]
+
+# Порог "скоро" для предупреждений по ТО
+MAINTENANCE_SOON_KM = 1500
+MAINTENANCE_SOON_DAYS = 30
+
 
 # ============================================================
 # ПЕРЕВОДЫ / TŁUMACZENIA
@@ -112,44 +195,121 @@ TEMP_CHART_RESAMPLE_THRESHOLD = 5000
 TR = {
     "ru": {
         "page_title": "Toyota Yaris 4 Hybrid — Диагностика",
-        "app_title": "🚗 Toyota Yaris 4 Hybrid (2021) — Панель диагностики",
+        "app_title": "🚗 Toyota Yaris 4 Hybrid (2021) — Полная диагностика",
         "language_label": "Язык / Language",
-        "tab1": "📊 Аналитика и Диагностика",
-        "tab2": "🔧 Техническое обслуживание",
-        "db_missing": "⚠️ Не удалось скачать базу данных с Google Диска. Проверьте, что доступ к файлу открыт по ссылке (\"Все, у кого есть ссылка\" → \"Читатель\"), и что ссылка ведёт на нужный файл.",
-        "db_error": "⚠️ Не удалось прочитать базу данных: {error}",
-        "downloading_db": "Загрузка базы данных с Google Диска…",
         "refresh_db_button": "🔄 Обновить базу данных",
         "db_last_loaded": "База данных загружена: {timestamp}",
+        "downloading_db": "Загрузка базы данных с Google Диска…",
+        "db_missing": "⚠️ Не удалось скачать базу данных с Google Диска. Проверьте, что доступ к файлу открыт по ссылке (\"Все, у кого есть ссылка\" → \"Читатель\").",
+        "db_error": "⚠️ Не удалось прочитать базу данных: {error}",
         "no_trip_data": "Нет данных о поездках для отображения.",
         "no_log_data": "Нет данных телеметрии (логов) для отображения.",
-        "no_cell_data": "Нет данных о напряжении элементов батареи. Включите подробное логирование (HighSpeedLogging) в настройках приложения или проведите процедуру HV Check, чтобы увидеть динамику SOH.",
+        "no_cell_data": "Нет данных о напряжении элементов батареи. Включите HighSpeedLogging в настройках Hybrid Assistant или проведите процедуру HV Check.",
+        "no_gps_data": "Нет GPS-данных для этой поездки/периода.",
+        "not_enough_data": "Недостаточно данных для расчёта.",
+        # --- Вкладки ---
+        "tab1": "📊 Аналитика и Диагностика",
+        "tab2": "📈 Детальные логи",
+        "tab3": "🔋 Мониторинг Dr. Prius",
+        "tab4": "⚖️ Сравнение и тренды",
+        "tab5": "🔧 Техническое обслуживание",
+        # --- Код доступа к картам ---
+        "map_code_label": "Введите код доступа",
+        "map_code_check_button": "Проверить код",
+        "map_code_close_button": "Продолжить без карт",
+        "code_wrong": "🔒 Неверный код. Осталось попыток: {attempts_left}.",
+        "code_locked": "🔒 Слишком много неверных попыток. Повторите через {minutes} мин {seconds} сек.",
+        "maps_locked_message": "Доступ к картам ограничен. Введите код доступа.",
+        # --- Метрики / карточки ---
         "metric_total_trips": "Всего поездок",
         "metric_total_distance": "Общий пробег (км)",
         "metric_avg_consumption": "Средний расход (л/100км)",
         "metric_soh": "Здоровье батареи (SOH)",
-        "chart1_title": "Динамика расхода топлива по поездкам",
-        "chart1_x": "Поездка",
-        "chart1_y": "Расход, л/100км",
-        "chart2_title": "Изменение здоровья батареи (SOH) во времени",
-        "chart2_x": "Время",
-        "chart2_y": "SOH, %",
-        "chart2_source_battlog": "Источник данных: подробный лог батареи (BATTLOG).",
-        "chart2_source_hvcheck": "Источник данных: процедуры HV Check.",
-        "chart3_title": "Температуры узлов (ДВС, Инвертор, ВВБ)",
-        "chart3_x": "Время",
-        "chart3_y": "Температура, °C",
-        "chart3_resampled": "График усреднён по минутным интервалам ({points} исходных точек).",
-        "legend_engine": "ДВС",
-        "legend_inverter": "Инвертор",
-        "legend_battery": "ВВБ",
-        "warning_inverter": "🔥 Внимание: температура инвертора превышала {limit}°C (макс. {value}°C)!",
-        "warning_engine": "🔥 Внимание: температура ДВС превышала {limit}°C (макс. {value}°C)!",
+        "metric_ev_pct": "% пути на EV",
+        "metric_ice_pct": "% пути на ДВС",
+        "metric_fuel_ml": "Расход топлива, мл",
+        "metric_brake_events": "Механических торможений",
+        # --- Карты ---
+        "map_section_title": "🗺️ Карта поездки (стиль My Toyota)",
+        "map_select_trip": "Выберите поездку",
+        "map_period_title": "🗺️ Карта за период",
+        "map_period_label": "Период",
+        "map_period_day": "День",
+        "map_period_week": "Неделя",
+        "map_period_month": "Месяц",
+        "map_period_year": "Год",
+        "map_period_avg_consumption": "Средний расход за период: {value} л/100км",
+        "legend_ev": "EV (ДВС выключен)",
+        "legend_ice": "ДВС работает",
+        # --- Экспертные параметры ---
+        "expert_params_title": "🧪 Экспертные параметры",
+        "ltft_title": "Долговременная топливная коррекция (LTFT), среднее после установки ГБО",
+        "ltft_warning": "⚠️ Рекомендуется проверить газовые форсунки и карту ГБО (смесь неоптимальна).",
+        "hv_safety_title": "Индикатор безопасности ВВБ (сопротивление изоляции)",
+        "hv_safety_no_data": "ℹ️ Hybrid Assistant не считывает параметр сопротивления изоляции ВВБ через OBD — эта диагностика недоступна программно. Для проверки изоляции обратитесь в сервис с мегаомметром.",
+        # --- Smart diagnostics ---
+        "smart_diag_title": "🔮 Умный прогноз (Smart Diagnostics)",
+        "soh_forecast_title": "Прогноз остатка ресурса ВВБ до критической дельты (0.20В)",
+        "soh_forecast_result": "При текущей динамике критическая дельта ожидается примерно через {days} дн. ({date}).",
+        "soh_forecast_stable": "Дельта напряжений стабильна или уменьшается — угрозы в обозримом будущем не выявлено.",
+        "radiator_forecast_title": "Прогноз загрязнения радиаторов (тренд температур относительно уличной)",
+        "radiator_forecast_result": "Разница температура инвертора/ДВС минус уличная растёт на ~{value}°C в месяц — стоит присмотреться к радиаторам.",
+        "radiator_forecast_stable": "Разница температур относительно уличной стабильна — признаков забивания радиаторов не выявлено.",
+        # --- Вкладка 2: детальные логи ---
+        "logs_select_trip": "Выберите поездку для детального анализа",
+        "logs_chart_speed_rpm": "Скорость и обороты ДВС",
+        "logs_chart_hv": "Напряжение и ток батареи (HV)",
+        "logs_chart_temps": "Температуры ДВС, инвертора и ВВБ",
+        "logs_chart_mg": "Мотор-генераторы MG1 / MG2 (обороты и момент)",
+        "logs_mg_note": "ℹ️ Hybrid Assistant не логирует фазные токи MG1/MG2 — доступны только обороты и крутящий момент.",
+        "logs_battlog_note": "Показаны отдельные датчики ВВБ из подробного лога (BATTLOG) за время этой поездки.",
+        "logs_no_battlog": "Подробные датчики ВВБ (BATTLOG) для этой поездки недоступны — показана усреднённая температура ВВБ из основного лога.",
+        # --- Вкладка 3: Dr. Prius ---
+        "drprius_upload_label": "Загрузите ежемесячный CSV-отчёт Dr. Prius",
+        "drprius_upload_help": "Можно загрузить сразу несколько файлов за разные месяцы.",
+        "drprius_no_files": "Файлы Dr. Prius ещё не загружены.",
+        "drprius_parse_error": "⚠️ Не удалось распознать формат файла {name}: не найдены столбцы с сопротивлением/напряжением по блокам. Проверьте, что заголовки колонок содержат слово resistance/opór и voltage/napięcie с номером блока.",
+        "drprius_resistance_chart": "Внутреннее сопротивление по блокам (мОм)",
+        "drprius_voltage_chart": "Напряжение по блокам (мВ)",
+        "drprius_wear_title": "Прогноз износа ячеек",
+        "drprius_wear_result": "⚠️ Блок(и) {blocks} — сопротивление растёт быстрее остальных. Рекомендуется дополнительная проверка.",
+        "drprius_wear_ok": "Существенных отклонений в темпе роста сопротивления между блоками не выявлено.",
+        "drprius_temp_spread_title": "Температурный разброс между датчиками ВВБ",
+        "drprius_temp_spread_warning": "⚠️ Максимальный разброс температур между датчиками: {value}°C — рекомендуется прочистить вентиляцию ВВБ.",
+        "drprius_temp_spread_ok": "Разброс температур между датчиками в норме (макс. {value}°C).",
+        "drprius_need_two_months": "Для прогноза износа нужно минимум 2 файла за разные месяцы.",
+        # --- Вкладка 4: сравнение ---
+        "compare_select_month": "Выберите месяц для сравнения",
+        "compare_table_title": "Сравнение показателей: Hybrid Assistant vs Dr. Prius",
+        "compare_col_metric": "Показатель",
+        "compare_col_ha": "Hybrid Assistant",
+        "compare_col_drprius": "Dr. Prius",
+        "compare_col_diff_flag": "Расхождение",
+        "compare_diff_high": "⚠️ выше нормы",
+        "compare_diff_ok": "в норме",
+        "compare_na": "н/д",
+        "compare_metric_soh": "SOH, %",
+        "compare_metric_delta": "Макс. дельта напряжений, В",
+        "compare_metric_peak_temp": "Пиковая температура ВВБ, °C",
+        "compare_metric_ah": "Ёмкость Ah (заводская, справочно)",
+        "compare_trend_soh": "Тренд SOH во времени",
+        "compare_trend_delta": "Рост дельты напряжений во времени",
+        "compare_trend_seasonal": "Сезонное сравнение температур ВВБ (лето к лету)",
+        "compare_seasonal_not_enough": "В базе данных пока только один сезон/год наблюдений — для сравнения \"лето к лету\" нужно больше исторических данных.",
+        # --- Вкладка 5: ТО ---
         "maintenance_title": "История технического обслуживания",
         "maintenance_empty": "Записи о техническом обслуживании отсутствуют.",
         "col_date": "Дата",
         "col_mileage": "Пробег (км)",
         "col_description": "Что сделано",
+        "maintenance_status_title": "Статус регламентных работ",
+        "maintenance_status_overdue": "🔴 Просрочено",
+        "maintenance_status_soon": "🟡 Скоро",
+        "maintenance_status_ok": "🟢 В норме",
+        "maintenance_status_km_left": "Осталось: {km} км",
+        "maintenance_status_days_left": "{days} дн.",
+        "maintenance_current_mileage": "Текущий пробег (по данным базы): {value} км",
+        "lpg_installed_note": "ℹ️ На пробеге 117 000 км установлено ГБО — интервалы ниже уже адаптированы под газовое оборудование.",
         "add_record_header": "Добавить новую запись",
         "password_label": "Введите пароль для доступа к добавлению записей",
         "password_wrong": "🔒 Неверный пароль. Осталось попыток: {attempts_left}.",
@@ -157,59 +317,126 @@ TR = {
         "password_locked": "🔒 Слишком много неверных попыток. Повторите через {minutes} мин {seconds} сек.",
         "password_unlocked": "🔓 Доступ разрешён для текущей сессии.",
         "lock_again_button": "🔒 Закрыть доступ",
-        "map_code_label": "Введите код доступа",
-        "map_code_check_button": "Проверить код",
-        "map_code_close_button": "Закрыть без карт",
-        "code_wrong": "🔒 Неверный код. Осталось попыток: {attempts_left}.",
-        "code_locked": "🔒 Слишком много неверных попыток. Повторите через {minutes} мин {seconds} сек.",
-        "maps_locked_message": "Доступ к картам ограничен. Введите код доступа.",
         "form_date": "Дата обслуживания",
         "form_mileage": "Пробег на момент ТО (км)",
         "form_description": "Описание выполненных работ",
         "save_button": "💾 Сохранить запись",
         "save_success": "✅ Запись успешно сохранена!",
         "save_fill_all": "⚠️ Заполните все поля перед сохранением.",
+        "invoice_upload_label": "📷 Сфотографируйте фактуру/чек — данные подставятся автоматически",
+        "invoice_processing": "Распознаём фактуру через Gemini…",
+        "invoice_success": "✅ Данные распознаны и подставлены в форму ниже.",
+        "invoice_error": "⚠️ Не удалось распознать фактуру: {error}",
+        "invoice_unavailable": "ℹ️ Автоматическое распознавание фактур недоступно: не настроен GEMINI_API_KEY в Secrets или не установлена библиотека google-generativeai.",
+        "smart_oil_hint": "🧠 Прогноз с учётом моточасов ДВС: остаток пробега скорректирован на {pct}% из-за интенсивной работы ДВС/ГБО.",
     },
     "pl": {
         "page_title": "Toyota Yaris 4 Hybrid — Diagnostyka",
-        "app_title": "🚗 Toyota Yaris 4 Hybrid (2021) — Panel diagnostyczny",
+        "app_title": "🚗 Toyota Yaris 4 Hybrid (2021) — Pełna diagnostyka",
         "language_label": "Język / Язык",
-        "tab1": "📊 Analityka i Diagnostyka",
-        "tab2": "🔧 Przeglądy techniczne",
-        "db_missing": "⚠️ Nie udało się pobrać bazy danych z Google Drive. Sprawdź, czy dostęp do pliku jest ustawiony jako \"Każdy, kto ma link\" → \"Czytelnik\", i czy link prowadzi do właściwego pliku.",
-        "db_error": "⚠️ Nie udało się odczytać bazy danych: {error}",
-        "downloading_db": "Pobieranie bazy danych z Google Drive…",
         "refresh_db_button": "🔄 Odśwież bazę danych",
         "db_last_loaded": "Baza danych wczytana: {timestamp}",
+        "downloading_db": "Pobieranie bazy danych z Google Drive…",
+        "db_missing": "⚠️ Nie udało się pobrać bazy danych z Google Drive. Sprawdź, czy dostęp do pliku jest ustawiony jako \"Każdy, kto ma link\" → \"Czytelnik\".",
+        "db_error": "⚠️ Nie udało się odczytać bazy danych: {error}",
         "no_trip_data": "Brak danych o przejazdach do wyświetlenia.",
         "no_log_data": "Brak danych telemetrycznych (logów) do wyświetlenia.",
-        "no_cell_data": "Brak danych o napięciu ogniw baterii. Włącz szczegółowe logowanie (HighSpeedLogging) w ustawieniach aplikacji lub wykonaj procedurę HV Check, aby zobaczyć zmianę SOH.",
+        "no_cell_data": "Brak danych o napięciu ogniw baterii. Włącz HighSpeedLogging w ustawieniach Hybrid Assistant lub wykonaj procedurę HV Check.",
+        "no_gps_data": "Brak danych GPS dla tego przejazdu/okresu.",
+        "not_enough_data": "Za mało danych do obliczeń.",
+        "tab1": "📊 Analityka i Diagnostyka",
+        "tab2": "📈 Szczegółowe logi",
+        "tab3": "🔋 Monitorowanie Dr. Prius",
+        "tab4": "⚖️ Porównanie i trendy",
+        "tab5": "🔧 Przeglądy techniczne",
+        "map_code_label": "Wprowadź kod dostępu",
+        "map_code_check_button": "Sprawdź kod",
+        "map_code_close_button": "Kontynuuj bez map",
+        "code_wrong": "🔒 Nieprawidłowy kod. Pozostałe próby: {attempts_left}.",
+        "code_locked": "🔒 Zbyt wiele nieudanych prób. Spróbuj ponownie za {minutes} min {seconds} s.",
+        "maps_locked_message": "Dostęp do map ograniczony. Wprowadź kod dostępu.",
         "metric_total_trips": "Liczba przejazdów",
         "metric_total_distance": "Łączny przebieg (km)",
         "metric_avg_consumption": "Średnie spalanie (l/100km)",
         "metric_soh": "Kondycja baterii (SOH)",
-        "chart1_title": "Zmiana spalania w kolejnych przejazdach",
-        "chart1_x": "Przejazd",
-        "chart1_y": "Spalanie, l/100km",
-        "chart2_title": "Zmiana kondycji baterii (SOH) w czasie",
-        "chart2_x": "Czas",
-        "chart2_y": "SOH, %",
-        "chart2_source_battlog": "Źródło danych: szczegółowy log baterii (BATTLOG).",
-        "chart2_source_hvcheck": "Źródło danych: procedury HV Check.",
-        "chart3_title": "Temperatury podzespołów (silnik, falownik, HV)",
-        "chart3_x": "Czas",
-        "chart3_y": "Temperatura, °C",
-        "chart3_resampled": "Wykres uśredniony w interwałach minutowych ({points} punktów źródłowych).",
-        "legend_engine": "Silnik spalinowy",
-        "legend_inverter": "Falownik",
-        "legend_battery": "Bateria HV",
-        "warning_inverter": "🔥 Uwaga: temperatura falownika przekroczyła {limit}°C (maks. {value}°C)!",
-        "warning_engine": "🔥 Uwaga: temperatura silnika przekroczyła {limit}°C (maks. {value}°C)!",
+        "metric_ev_pct": "% trasy na EV",
+        "metric_ice_pct": "% trasy na silniku",
+        "metric_fuel_ml": "Zużyte paliwo, ml",
+        "metric_brake_events": "Hamowań mechanicznych",
+        "map_section_title": "🗺️ Mapa przejazdu (styl My Toyota)",
+        "map_select_trip": "Wybierz przejazd",
+        "map_period_title": "🗺️ Mapa za okres",
+        "map_period_label": "Okres",
+        "map_period_day": "Dzień",
+        "map_period_week": "Tydzień",
+        "map_period_month": "Miesiąc",
+        "map_period_year": "Rok",
+        "map_period_avg_consumption": "Średnie spalanie w okresie: {value} l/100km",
+        "legend_ev": "EV (silnik wyłączony)",
+        "legend_ice": "Silnik pracuje",
+        "expert_params_title": "🧪 Parametry eksperckie",
+        "ltft_title": "Długoterminowa korekta paliwa (LTFT), średnia po montażu LPG",
+        "ltft_warning": "⚠️ Zalecana kontrola wtryskiwaczy gazowych i mapy LPG (mieszanka nieoptymalna).",
+        "hv_safety_title": "Wskaźnik bezpieczeństwa HV (rezystancja izolacji)",
+        "hv_safety_no_data": "ℹ️ Hybrid Assistant nie odczytuje rezystancji izolacji HV przez OBD — ta diagnostyka jest niedostępna programowo. W celu sprawdzenia izolacji skontaktuj się z serwisem (megaomomierz).",
+        "smart_diag_title": "🔮 Inteligentna prognoza (Smart Diagnostics)",
+        "soh_forecast_title": "Prognoza zasobu baterii HV do krytycznej delty (0.20V)",
+        "soh_forecast_result": "Przy obecnej dynamice krytyczna delta oczekiwana za ok. {days} dni ({date}).",
+        "soh_forecast_stable": "Delta napięć jest stabilna lub maleje — nie wykryto zagrożenia w najbliższym czasie.",
+        "radiator_forecast_title": "Prognoza zabrudzenia chłodnic (trend temperatur względem otoczenia)",
+        "radiator_forecast_result": "Różnica temperatury falownika/silnika minus otoczenie rośnie o ~{value}°C miesięcznie — warto sprawdzić chłodnice.",
+        "radiator_forecast_stable": "Różnica temperatur względem otoczenia jest stabilna — brak oznak zabrudzenia chłodnic.",
+        "logs_select_trip": "Wybierz przejazd do szczegółowej analizy",
+        "logs_chart_speed_rpm": "Prędkość i obroty silnika",
+        "logs_chart_hv": "Napięcie i prąd baterii (HV)",
+        "logs_chart_temps": "Temperatury silnika, falownika i baterii HV",
+        "logs_chart_mg": "Silniki MG1 / MG2 (obroty i moment)",
+        "logs_mg_note": "ℹ️ Hybrid Assistant nie loguje prądów fazowych MG1/MG2 — dostępne są tylko obroty i moment obrotowy.",
+        "logs_battlog_note": "Pokazano osobne czujniki baterii HV ze szczegółowego logu (BATTLOG) dla tego przejazdu.",
+        "logs_no_battlog": "Szczegółowe czujniki baterii HV (BATTLOG) niedostępne dla tego przejazdu — pokazano uśrednioną temperaturę z głównego logu.",
+        "drprius_upload_label": "Wgraj miesięczny raport CSV z Dr. Prius",
+        "drprius_upload_help": "Można wgrać od razu kilka plików za różne miesiące.",
+        "drprius_no_files": "Pliki Dr. Prius nie zostały jeszcze wgrane.",
+        "drprius_parse_error": "⚠️ Nie udało się rozpoznać formatu pliku {name}: brak kolumn z rezystancją/napięciem dla bloków. Sprawdź, czy nagłówki zawierają słowo resistance/opór oraz voltage/napięcie z numerem bloku.",
+        "drprius_resistance_chart": "Rezystancja wewnętrzna wg bloków (mOhm)",
+        "drprius_voltage_chart": "Napięcie wg bloków (mV)",
+        "drprius_wear_title": "Prognoza zużycia ogniw",
+        "drprius_wear_result": "⚠️ Blok(i) {blocks} — rezystancja rośnie szybciej niż pozostałe. Zalecana dodatkowa kontrola.",
+        "drprius_wear_ok": "Nie wykryto istotnych odchyleń w tempie wzrostu rezystancji między blokami.",
+        "drprius_temp_spread_title": "Rozrzut temperatur między czujnikami HV",
+        "drprius_temp_spread_warning": "⚠️ Maksymalny rozrzut temperatur między czujnikami: {value}°C — zalecane oczyszczenie wentylacji baterii HV.",
+        "drprius_temp_spread_ok": "Rozrzut temperatur w normie (maks. {value}°C).",
+        "drprius_need_two_months": "Do prognozy zużycia potrzebne są minimum 2 pliki z różnych miesięcy.",
+        "compare_select_month": "Wybierz miesiąc do porównania",
+        "compare_table_title": "Porównanie wskaźników: Hybrid Assistant vs Dr. Prius",
+        "compare_col_metric": "Wskaźnik",
+        "compare_col_ha": "Hybrid Assistant",
+        "compare_col_drprius": "Dr. Prius",
+        "compare_col_diff_flag": "Rozbieżność",
+        "compare_diff_high": "⚠️ powyżej normy",
+        "compare_diff_ok": "w normie",
+        "compare_na": "brak danych",
+        "compare_metric_soh": "SOH, %",
+        "compare_metric_delta": "Maks. delta napięć, V",
+        "compare_metric_peak_temp": "Szczytowa temperatura HV, °C",
+        "compare_metric_ah": "Pojemność Ah (fabryczna, orientacyjnie)",
+        "compare_trend_soh": "Trend SOH w czasie",
+        "compare_trend_delta": "Wzrost delty napięć w czasie",
+        "compare_trend_seasonal": "Sezonowe porównanie temperatur HV (lato do lata)",
+        "compare_seasonal_not_enough": "W bazie danych jest na razie tylko jeden sezon/rok obserwacji — do porównania \"lato do lata\" potrzeba więcej danych historycznych.",
         "maintenance_title": "Historia przeglądów technicznych",
         "maintenance_empty": "Brak zapisanych przeglądów.",
         "col_date": "Data",
         "col_mileage": "Przebieg (km)",
         "col_description": "Zakres prac",
+        "maintenance_status_title": "Status przeglądów okresowych",
+        "maintenance_status_overdue": "🔴 Przeterminowane",
+        "maintenance_status_soon": "🟡 Wkrótce",
+        "maintenance_status_ok": "🟢 W normie",
+        "maintenance_status_km_left": "Pozostało: {km} km",
+        "maintenance_status_days_left": "{days} dni",
+        "maintenance_current_mileage": "Bieżący przebieg (wg bazy danych): {value} km",
+        "lpg_installed_note": "ℹ️ Przy przebiegu 117 000 km zamontowano LPG — poniższe interwały są już dostosowane do instalacji gazowej.",
         "add_record_header": "Dodaj nowy wpis",
         "password_label": "Wprowadź hasło, aby dodać wpis",
         "password_wrong": "🔒 Nieprawidłowe hasło. Pozostałe próby: {attempts_left}.",
@@ -217,25 +444,25 @@ TR = {
         "password_locked": "🔒 Zbyt wiele nieudanych prób. Spróbuj ponownie za {minutes} min {seconds} s.",
         "password_unlocked": "🔓 Dostęp odblokowany na tę sesję.",
         "lock_again_button": "🔒 Zablokuj ponownie",
-        "map_code_label": "Wprowadź kod dostępu",
-        "map_code_check_button": "Sprawdź kod",
-        "map_code_close_button": "Zamknij bez map",
-        "code_wrong": "🔒 Nieprawidłowy kod. Pozostałe próby: {attempts_left}.",
-        "code_locked": "🔒 Zbyt wiele nieudanych prób. Spróbuj ponownie za {minutes} min {seconds} s.",
-        "maps_locked_message": "Dostęp do map ograniczony. Wprowadź kod dostępu.",
         "form_date": "Data przeglądu",
         "form_mileage": "Przebieg w dniu przeglądu (km)",
         "form_description": "Opis wykonanych prac",
         "save_button": "💾 Zapisz wpis",
         "save_success": "✅ Wpis został zapisany!",
         "save_fill_all": "⚠️ Uzupełnij wszystkie pola przed zapisaniem.",
+        "invoice_upload_label": "📷 Sfotografuj fakturę/paragon — dane zostaną podstawione automatycznie",
+        "invoice_processing": "Rozpoznawanie faktury przez Gemini…",
+        "invoice_success": "✅ Dane rozpoznane i podstawione do formularza poniżej.",
+        "invoice_error": "⚠️ Nie udało się rozpoznać faktury: {error}",
+        "invoice_unavailable": "ℹ️ Automatyczne rozpoznawanie faktur niedostępne: brak GEMINI_API_KEY w Secrets lub brak biblioteki google-generativeai.",
+        "smart_oil_hint": "🧠 Prognoza z uwzględnieniem motogodzin silnika: pozostały przebieg skorygowany o {pct}% z powodu intensywnej pracy silnika/LPG.",
     },
 }
 
 
 def t(key: str) -> str:
     """Достаёт перевод для текущего языка."""
-    lang = st.session_state.get("lang", "ru")
+    lang = st.session_state.get("lang", "pl")
     return TR[lang].get(key, key)
 
 
@@ -246,16 +473,10 @@ def t(key: str) -> str:
 @st.cache_resource(show_spinner=False, ttl=DB_CACHE_TTL_SECONDS)
 def download_database() -> str:
     """Скачивает hybridassistant.db с Google Диска во временное
-    хранилище контейнера и возвращает путь к локальному файлу.
-
-    Результат кэшируется на время жизни процесса Streamlit (либо на
-    DB_CACHE_TTL_SECONDS секунд) — иначе файл скачивался бы заново
-    на каждый ререндер страницы, а не только при запуске приложения.
-    Кнопка "Обновить базу данных" в боковой панели сбрасывает кэш и
-    вызывает немедленное повторное скачивание.
-    """
+    хранилище контейнера. Результат кэшируется, чтобы не скачивать
+    файл заново на каждый ререндер страницы — только на холодном
+    старте, по истечении TTL или по кнопке "Обновить базу данных"."""
     output_path = LOCAL_DB_CACHE_PATH
-    # На случай, если предыдущая попытка скачивания оборвалась на середине.
     if os.path.exists(output_path):
         try:
             os.remove(output_path)
@@ -266,35 +487,23 @@ def download_database() -> str:
 
     if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
         raise RuntimeError(
-            "Пустой или отсутствующий файл после скачивания — проверьте настройки доступа файла на Google Диске."
+            "Пустой или отсутствующий файл после скачивания — проверьте доступ по ссылке."
         )
-
-    # Быстрая проверка, что скачался именно файл SQLite, а не HTML-страница
-    # с ошибкой доступа (Google Диск возвращает такую страницу, если файл
-    # не расшарен по ссылке).
     with open(output_path, "rb") as f:
         header = f.read(16)
     if not header.startswith(b"SQLite format 3"):
         raise RuntimeError(
-            "Скачанный файл не является базой SQLite — вероятно, доступ к файлу на Google Диске не открыт по ссылке."
+            "Скачанный файл не является базой SQLite — вероятно, доступ по ссылке не открыт."
         )
-
     return output_path
 
 
 # ============================================================
 # РАБОТА С БАЗОЙ ДАННЫХ (SQLite)
 # ============================================================
-# ВАЖНО: путь к скачанному файлу (LOCAL_DB_CACHE_PATH) всегда один и
-# тот же, даже после повторного скачивания по кнопке "Обновить базу
-# данных" или по истечении DB_CACHE_TTL_SECONDS. Если кэшировать эти
-# функции только по db_path, st.cache_data не заметит, что файл на
-# диске перезаписан новыми данными, и продолжит отдавать старые
-# DataFrame из кэша. Поэтому каждая функция дополнительно принимает
-# file_version — время последнего изменения файла (mtime): как только
-# файл перезаписывается свежей версией, mtime меняется, и Streamlit
-# автоматически считает это новым набором аргументов и перечитывает
-# базу заново.
+# Все функции принимают file_version (mtime скачанного файла), чтобы
+# кэш Streamlit корректно инвалидировался при каждом новом скачивании
+# файла с одним и тем же путём на диске.
 
 @st.cache_data(show_spinner=False)
 def _table_exists(db_path: str, table_name: str, file_version: float) -> bool:
@@ -306,10 +515,33 @@ def _table_exists(db_path: str, table_name: str, file_version: float) -> bool:
 
 
 @st.cache_data(show_spinner=False)
-def load_trips_with_consumption(db_path: str, file_version: float) -> pd.DataFrame:
-    """Читает таблицу TRIPS и считает расход топлива (л/100км) для
-    каждой поездки на основании максимального значения TRIPFUEL (мл) в
-    FASTLOG в пределах временного окна поездки [TSDEB, TSFIN]."""
+def load_fastlog_full(db_path: str, file_version: float) -> pd.DataFrame:
+    """Читает FASTLOG целиком и добавляет производные колонки:
+    datetime, режим EV/ICE (по ICE_RPM) и флаг активного механического
+    (фрикционного) торможения (по BRK_MCYL_TRQ)."""
+    if not _table_exists(db_path, "FASTLOG", file_version):
+        return pd.DataFrame()
+
+    with sqlite3.connect(db_path) as conn:
+        df = pd.read_sql_query("SELECT * FROM FASTLOG ORDER BY TIMESTAMP", conn)
+
+    if df.empty:
+        return df
+
+    df["datetime"] = pd.to_datetime(df["TIMESTAMP"], unit="ms", errors="coerce")
+    numeric_cols = [c for c in df.columns if c not in ("TIMESTAMP", "datetime")]
+    for c in numeric_cols:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    df["mode"] = np.where(df["ICE_RPM"].fillna(0) > 0, "ICE", "EV")
+    df["friction_braking_active"] = df["BRK_MCYL_TRQ"].fillna(0) != 0
+    return df
+
+
+@st.cache_data(show_spinner=False)
+def load_trips_full(db_path: str, file_version: float) -> pd.DataFrame:
+    """Читает TRIPS и TRIPINFO, обогащает их метриками из FASTLOG:
+    расход топлива, % EV/ДВС, число механических торможений."""
     if not _table_exists(db_path, "TRIPS", file_version):
         return pd.DataFrame()
 
@@ -317,13 +549,14 @@ def load_trips_with_consumption(db_path: str, file_version: float) -> pd.DataFra
         trips = pd.read_sql_query(
             "SELECT TSDEB, TSFIN, NBSEC, NKMS FROM TRIPS ORDER BY TSDEB", conn
         )
-        fastlog_available = _table_exists(db_path, "FASTLOG", file_version)
-        fuel = (
+        tripinfo = (
             pd.read_sql_query(
-                "SELECT TIMESTAMP, TRIPFUEL FROM FASTLOG ORDER BY TIMESTAMP", conn
+                "SELECT TIMESTAMP, NUMBRAKES, NUMBADBRAKES, NUMHALFBRAKES, ICE_KWH "
+                "FROM TRIPINFO",
+                conn,
             )
-            if fastlog_available
-            else pd.DataFrame(columns=["TIMESTAMP", "TRIPFUEL"])
+            if _table_exists(db_path, "TRIPINFO", file_version)
+            else pd.DataFrame()
         )
 
     if trips.empty:
@@ -333,67 +566,94 @@ def load_trips_with_consumption(db_path: str, file_version: float) -> pd.DataFra
     trips["distance"] = pd.to_numeric(trips["NKMS"], errors="coerce")
     trips["duration_min"] = pd.to_numeric(trips["NBSEC"], errors="coerce") / 60.0
 
-    fuel_ts = fuel["TIMESTAMP"].to_numpy() if not fuel.empty else None
-    fuel_val = pd.to_numeric(fuel["TRIPFUEL"], errors="coerce").to_numpy() if not fuel.empty else None
+    fastlog = load_fastlog_full(db_path, file_version)
 
-    consumption = []
+    consumption, ev_pct, fuel_ml_list, brake_events, avg_ltft = [], [], [], [], []
+
     for _, row in trips.iterrows():
-        fuel_ml = None
-        if fuel_ts is not None:
-            mask = (fuel_ts >= row["TSDEB"]) & (fuel_ts <= row["TSFIN"])
-            if mask.any():
-                trip_fuel_values = fuel_val[mask]
-                trip_fuel_values = trip_fuel_values[~pd.isna(trip_fuel_values)]
-                if len(trip_fuel_values) > 0:
-                    fuel_ml = trip_fuel_values.max()
-        if fuel_ml is not None and row["distance"] and row["distance"] > 0:
+        if fastlog.empty:
+            consumption.append(None)
+            ev_pct.append(None)
+            fuel_ml_list.append(None)
+            brake_events.append(None)
+            avg_ltft.append(None)
+            continue
+
+        mask = (fastlog["TIMESTAMP"] >= row["TSDEB"]) & (fastlog["TIMESTAMP"] <= row["TSFIN"])
+        trip_log = fastlog.loc[mask]
+
+        if trip_log.empty:
+            consumption.append(None)
+            ev_pct.append(None)
+            fuel_ml_list.append(None)
+            brake_events.append(None)
+            avg_ltft.append(None)
+            continue
+
+        fuel_ml = trip_log["TRIPFUEL"].dropna().max() if "TRIPFUEL" in trip_log else None
+        if pd.notna(fuel_ml) and row["distance"] and row["distance"] > 0:
             consumption.append(fuel_ml / 1000.0 / row["distance"] * 100.0)
         else:
             consumption.append(None)
+        fuel_ml_list.append(fuel_ml if pd.notna(fuel_ml) else None)
+
+        total_dist = trip_log["TRIP_DIST"].dropna().max() if "TRIP_DIST" in trip_log else None
+        ev_dist = trip_log["TRIP_EV_DIST"].dropna().max() if "TRIP_EV_DIST" in trip_log else None
+        if pd.notna(total_dist) and total_dist and pd.notna(ev_dist):
+            ev_pct.append(min(100.0, max(0.0, ev_dist / total_dist * 100.0)))
+        else:
+            ev_pct.append(None)
+
+        braking = trip_log["friction_braking_active"].astype(int)
+        edges = int((braking.diff() == 1).sum())
+        brake_events.append(edges)
+
+        avg_ltft.append(trip_log["LTFT"].dropna().mean() if "LTFT" in trip_log else None)
 
     trips["consumption"] = consumption
-    return trips.sort_values("date").reset_index(drop=True)
+    trips["ev_pct"] = ev_pct
+    trips["fuel_ml"] = fuel_ml_list
+    trips["brake_events"] = brake_events
+    trips["avg_ltft"] = avg_ltft
+
+    trips = trips.sort_values("date").reset_index(drop=True)
+
+    if not tripinfo.empty:
+        tripinfo = tripinfo.rename(columns={"TIMESTAMP": "TSFIN"})
+        trips = trips.merge(tripinfo, on="TSFIN", how="left")
+
+    return trips
 
 
 @st.cache_data(show_spinner=False)
 def load_temperature_log(db_path: str, file_version: float) -> pd.DataFrame:
-    """Читает температуры узлов из FASTLOG. При большом объёме данных
-    усредняет по минутным интервалам для быстрого отображения."""
-    if not _table_exists(db_path, "FASTLOG", file_version):
+    """Читает температуры узлов из FASTLOG, усредняя при большом объёме."""
+    fastlog = load_fastlog_full(db_path, file_version)
+    if fastlog.empty:
         return pd.DataFrame()
 
-    with sqlite3.connect(db_path) as conn:
-        df = pd.read_sql_query(
-            "SELECT TIMESTAMP, ICE_TEMP, INVERTER_TEMP, BATTERY_TEMP FROM FASTLOG ORDER BY TIMESTAMP",
-            conn,
-        )
-
-    if df.empty:
-        return df
-
-    df["timestamp"] = pd.to_datetime(df["TIMESTAMP"], unit="ms", errors="coerce")
-    df = df.rename(
+    cols = ["datetime", "ICE_TEMP", "INVERTER_TEMP", "BATTERY_TEMP", "AMBIENT_TEMP"]
+    cols = [c for c in cols if c in fastlog.columns]
+    df = fastlog[cols].rename(
         columns={
             "ICE_TEMP": "engine_temp",
             "INVERTER_TEMP": "inverter_temp",
             "BATTERY_TEMP": "battery_temp",
+            "AMBIENT_TEMP": "ambient_temp",
         }
-    )
-    for col in ("engine_temp", "inverter_temp", "battery_temp"):
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+    ).dropna(subset=["datetime"])
 
     original_points = len(df)
     resampled = original_points > TEMP_CHART_RESAMPLE_THRESHOLD
-
     if resampled:
+        value_cols = [c for c in df.columns if c != "datetime"]
         df = (
-            df.set_index("timestamp")[["engine_temp", "inverter_temp", "battery_temp"]]
+            df.set_index("datetime")[value_cols]
             .resample("1min")
             .mean()
             .dropna(how="all")
             .reset_index()
         )
-
     df.attrs["original_points"] = original_points
     df.attrs["resampled"] = resampled
     return df
@@ -401,10 +661,8 @@ def load_temperature_log(db_path: str, file_version: float) -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def load_cell_delta_series(db_path: str, file_version: float) -> pd.DataFrame:
-    """Ищет данные о поблочных напряжениях батареи в BATTLOG (подробный
-    непрерывный лог) или HVCHECKCELL (данные процедуры HV Check) и
-    считает дельту (max-min) между элементами для каждого момента
-    времени. Возвращает DataFrame с колонками timestamp, cell_delta, source."""
+    """Ищет поблочные напряжения батареи в BATTLOG или HVCHECKCELL и
+    считает дельту (max-min) для каждого момента времени."""
     frames = []
 
     if _table_exists(db_path, "BATTLOG", file_version):
@@ -445,12 +703,26 @@ def load_cell_delta_series(db_path: str, file_version: float) -> pd.DataFrame:
     return combined.reset_index(drop=True)
 
 
+@st.cache_data(show_spinner=False)
+def load_battlog_probes(db_path: str, file_version: float) -> pd.DataFrame:
+    """Читает подробные датчики температуры ВВБ (TB1..TB8) из BATTLOG,
+    если этот лог включён и заполнен."""
+    if not _table_exists(db_path, "BATTLOG", file_version):
+        return pd.DataFrame()
+    with sqlite3.connect(db_path) as conn:
+        df = pd.read_sql_query("SELECT * FROM BATTLOG ORDER BY TIMESTAMP", conn)
+    if df.empty:
+        return df
+    df["datetime"] = pd.to_datetime(df["TIMESTAMP"], unit="ms", errors="coerce")
+    probe_cols = [c for c in df.columns if c.startswith("TB")]
+    for c in probe_cols:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df
+
+
 def calculate_soh(delta_v: float):
-    """Линейная интерполяция здоровья батареи (SOH) по дельте напряжений
-    элементов под нагрузкой.
-    delta_v <= 0.02В -> 100%
-    delta_v >= 0.20В -> 0%
-    """
+    """Линейная интерполяция SOH по дельте напряжений элементов под
+    нагрузкой. delta_v<=0.02В -> 100%, delta_v>=0.20В -> 0%."""
     if pd.isna(delta_v):
         return None
     if delta_v <= SOH_DELTA_MIN:
@@ -461,8 +733,116 @@ def calculate_soh(delta_v: float):
     return round(100.0 * (1 - ratio), 1)
 
 
+@st.cache_data(show_spinner=False)
+def get_lpg_install_date(db_path: str, file_version: float) -> "datetime | None":
+    """Оценивает дату установки ГБО как первый момент, когда одометр
+    (ODO) в логах достиг порога LPG_INSTALL_ODO_KM. Если в базе нет
+    записей с таким пробегом, возвращает None (год выпуска используется
+    как единственный ориентир)."""
+    fastlog = load_fastlog_full(db_path, file_version)
+    if fastlog.empty or "ODO" not in fastlog.columns:
+        return None
+    reached = fastlog.loc[fastlog["ODO"] >= LPG_INSTALL_ODO_KM]
+    if reached.empty:
+        return None
+    return reached["datetime"].min()
+
+
+@st.cache_data(show_spinner=False)
+def get_current_mileage(db_path: str, file_version: float) -> "float | None":
+    fastlog = load_fastlog_full(db_path, file_version)
+    if fastlog.empty or "ODO" not in fastlog.columns:
+        return None
+    val = fastlog["ODO"].dropna().max()
+    return float(val) if pd.notna(val) else None
+
+
 # ============================================================
-# РАБОТА С ФАЙЛОМ ОБСЛУЖИВАНИЯ (JSON)
+# ЗАЩИТА ОТ ПОДБОРА: ПАРОЛЬ ТО + КОД ДОСТУПА К КАРТАМ
+# ============================================================
+
+def _expected_secret_hash(secret_key: str, fallback_hash: str) -> str:
+    try:
+        return st.secrets.get(secret_key, fallback_hash)
+    except Exception:
+        return fallback_hash
+
+
+def _verify_secret(value_input: str, secret_key: str, fallback_hash: str) -> bool:
+    input_hash = hashlib.sha256(value_input.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(input_hash, _expected_secret_hash(secret_key, fallback_hash))
+
+
+def _lockout_remaining_seconds(namespace: str) -> int:
+    lockout_until = st.session_state.get(f"{namespace}_lockout_until", 0.0)
+    return max(0, int(lockout_until - time.time()))
+
+
+def _register_failed_attempt(namespace: str) -> int:
+    attempts = st.session_state.get(f"{namespace}_failed_attempts", 0) + 1
+    st.session_state[f"{namespace}_failed_attempts"] = attempts
+    if attempts >= MAX_PASSWORD_ATTEMPTS:
+        st.session_state[f"{namespace}_lockout_until"] = time.time() + LOCKOUT_SECONDS
+        st.session_state[f"{namespace}_failed_attempts"] = 0
+        return 0
+    return MAX_PASSWORD_ATTEMPTS - attempts
+
+
+def _register_successful_unlock(namespace: str, unlocked_flag: str) -> None:
+    st.session_state[unlocked_flag] = True
+    st.session_state[f"{namespace}_failed_attempts"] = 0
+    st.session_state[f"{namespace}_lockout_until"] = 0.0
+
+
+@st.dialog("🔒 Код доступа к картам / Kod dostępu do map")
+def _map_access_code_dialog():
+    remaining = _lockout_remaining_seconds("mapcode")
+
+    if remaining > 0:
+        minutes, seconds = divmod(remaining, 60)
+        st.error(t("code_locked").format(minutes=minutes, seconds=seconds))
+        if st.button(t("map_code_close_button"), use_container_width=True):
+            st.session_state["map_dialog_completed"] = True
+            st.session_state["map_unlocked"] = False
+            st.rerun()
+        return
+
+    code_input = st.text_input(t("map_code_label"), type="password", key="map_code_dialog_input")
+
+    col_check, col_close = st.columns(2)
+    check_clicked = col_check.button(f"✅ {t('map_code_check_button')}", use_container_width=True)
+    close_clicked = col_close.button(f"❌ {t('map_code_close_button')}", use_container_width=True)
+
+    if check_clicked:
+        if _verify_secret(code_input, "map_access_code_hash", _FALLBACK_MAP_CODE_HASH):
+            _register_successful_unlock("mapcode", "map_unlocked")
+            st.session_state["map_dialog_completed"] = True
+            st.rerun()
+        else:
+            attempts_left = _register_failed_attempt("mapcode")
+            st.error(t("code_wrong").format(attempts_left=attempts_left))
+
+    if close_clicked:
+        st.session_state["map_dialog_completed"] = True
+        st.session_state["map_unlocked"] = False
+        st.rerun()
+
+
+def ensure_map_code_dialog_shown() -> None:
+    if "map_dialog_completed" not in st.session_state:
+        _map_access_code_dialog()
+
+
+def maps_are_unlocked() -> bool:
+    return st.session_state.get("map_unlocked", False)
+
+
+def render_maps_locked_placeholder() -> None:
+    st.info(t("maps_locked_message"))
+
+
+# ============================================================
+# ЖУРНАЛ ТО (maintenance.json)
 # ============================================================
 
 def load_maintenance() -> list:
@@ -484,129 +864,263 @@ def save_maintenance_record(record: dict) -> None:
         json.dump(records, f, ensure_ascii=False, indent=2)
 
 
-# ============================================================
-# ЗАЩИТА ОТ ПОДБОРА: ПАРОЛЬ ТО + КОД ДОСТУПА К КАРТАМ
-# ============================================================
-# Общие функции для двух независимых механизмов защиты:
-#   namespace="maintenance" — пароль формы ТО
-#   namespace="mapcode"     — код доступа к картам ("95-100")
-# У каждого свой счётчик неудачных попыток и своя блокировка в
-# st.session_state, поэтому подбор одного не влияет на другой.
-
-def _expected_secret_hash(secret_key: str, fallback_hash: str) -> str:
-    """Хеш секрета берётся из st.secrets, если он там задан (рекомендуемый
-    способ для продакшена — тогда секрет не попадает в git-репозиторий),
-    иначе используется запасной хеш, зашитый в код."""
-    try:
-        return st.secrets.get(secret_key, fallback_hash)
-    except Exception:
-        return fallback_hash
+def _find_last_matching_record(records: list, keywords: list):
+    """Ищет последнюю (по пробегу) запись ТО, чьё описание содержит
+    один из ключевых слов пункта регламента."""
+    matches = []
+    for rec in records:
+        desc = str(rec.get("description", "")).lower()
+        if any(kw.lower() in desc for kw in keywords):
+            matches.append(rec)
+    if not matches:
+        return None
+    return max(matches, key=lambda r: r.get("mileage", 0))
 
 
-def _verify_secret(value_input: str, secret_key: str, fallback_hash: str) -> bool:
-    """Сравнение хешей за постоянное время (защита от timing-атак),
-    секрет в открытом виде никогда не хранится и не логируется."""
-    input_hash = hashlib.sha256(value_input.encode("utf-8")).hexdigest()
-    return hmac.compare_digest(input_hash, _expected_secret_hash(secret_key, fallback_hash))
+def compute_maintenance_status(
+    db_path: "str | None", file_version: "float | None", records: list
+) -> list:
+    """Считает статус каждого пункта регламента ТО. Возвращает список
+    словарей: key, due_km, due_date, remaining_km, remaining_days, status."""
+    current_mileage = None
+    if db_path:
+        try:
+            current_mileage = get_current_mileage(db_path, file_version)
+        except Exception:
+            current_mileage = None
+    if current_mileage is None:
+        last_record = max(records, key=lambda r: r.get("mileage", 0)) if records else None
+        current_mileage = last_record["mileage"] if last_record else 0.0
 
+    lpg_active = current_mileage >= LPG_INSTALL_ODO_KM
 
-def _lockout_remaining_seconds(namespace: str) -> int:
-    """Сколько секунд ещё осталось до снятия блокировки (0, если блокировки нет)."""
-    lockout_until = st.session_state.get(f"{namespace}_lockout_until", 0.0)
-    remaining = lockout_until - time.time()
-    return max(0, int(remaining))
+    lpg_install_date = None
+    if db_path:
+        try:
+            lpg_install_date = get_lpg_install_date(db_path, file_version)
+        except Exception:
+            lpg_install_date = None
 
+    # Эвристика "умного" прогноза для масла: если ДВС в среднем работал
+    # с высокой нагрузкой (ICE_LOAD выше медианы по всей истории),
+    # немного сокращаем прогнозируемый остаток пробега. Это ОЦЕНКА, а
+    # не точный расчёт по моточасам.
+    oil_adjustment_pct = 0
+    if db_path:
+        try:
+            fastlog = load_fastlog_full(db_path, file_version)
+            if not fastlog.empty and "ICE_LOAD" in fastlog.columns:
+                ice_rows = fastlog.loc[fastlog["ICE_RPM"].fillna(0) > 0, "ICE_LOAD"]
+                if len(ice_rows) > 50:
+                    median_load = ice_rows.median()
+                    recent_cutoff = fastlog["datetime"].max() - timedelta(days=30)
+                    recent_rows = fastlog.loc[
+                        (fastlog["datetime"] >= recent_cutoff) & (fastlog["ICE_RPM"].fillna(0) > 0),
+                        "ICE_LOAD",
+                    ]
+                    if len(recent_rows) > 20 and recent_rows.mean() > median_load * 1.15:
+                        oil_adjustment_pct = 15
+        except Exception:
+            oil_adjustment_pct = 0
 
-def _register_failed_attempt(namespace: str) -> int:
-    """Регистрирует неудачную попытку и, при превышении лимита, включает
-    блокировку. Возвращает число оставшихся попыток до блокировки."""
-    attempts = st.session_state.get(f"{namespace}_failed_attempts", 0) + 1
-    st.session_state[f"{namespace}_failed_attempts"] = attempts
-    if attempts >= MAX_PASSWORD_ATTEMPTS:
-        st.session_state[f"{namespace}_lockout_until"] = time.time() + LOCKOUT_SECONDS
-        st.session_state[f"{namespace}_failed_attempts"] = 0
-        return 0
-    return MAX_PASSWORD_ATTEMPTS - attempts
+    today = date.today()
+    results = []
 
+    for item in MAINTENANCE_ITEMS:
+        is_lpg_only = item.get("lpg_only", False)
+        if is_lpg_only and not lpg_active:
+            continue  # пункт появляется только после установки ГБО
 
-def _register_successful_unlock(namespace: str, unlocked_flag: str) -> None:
-    st.session_state[unlocked_flag] = True
-    st.session_state[f"{namespace}_failed_attempts"] = 0
-    st.session_state[f"{namespace}_lockout_until"] = 0.0
+        keywords = item["keywords"]
+        last_record = _find_last_matching_record(records, keywords)
 
+        interval_km = item.get("lpg_km") if lpg_active and item.get("lpg_km") is not None else item.get("km")
+        interval_years = (
+            item.get("lpg_years") if lpg_active and item.get("lpg_years") is not None else item.get("years")
+        )
 
-# ============================================================
-# ДИАЛОГ КОДА ДОСТУПА К КАРТАМ ("95-100")
-# ============================================================
-# Показывается не более одного раза за сессию: как только пользователь
-# либо ввёл верный код, либо нажал "Закрыть без карт", флаг
-# map_dialog_completed сохраняется в st.session_state и диалог больше
-# не появляется до перезапуска браузера/сессии.
-
-@st.dialog("🔒 Код доступа к картам / Kod dostępu do map")
-def _map_access_code_dialog():
-    remaining = _lockout_remaining_seconds("mapcode")
-
-    if remaining > 0:
-        minutes, seconds = divmod(remaining, 60)
-        st.error(t("code_locked").format(minutes=minutes, seconds=seconds))
-        if st.button(t("map_code_close_button"), use_container_width=True):
-            st.session_state["map_dialog_completed"] = True
-            st.session_state["map_unlocked"] = False
-            st.rerun()
-        return
-
-    code_input = st.text_input(
-        t("map_code_label"), type="password", key="map_code_dialog_input"
-    )
-
-    col_check, col_close = st.columns(2)
-    check_clicked = col_check.button(
-        f"✅ {t('map_code_check_button')}", use_container_width=True
-    )
-    close_clicked = col_close.button(
-        f"❌ {t('map_code_close_button')}", use_container_width=True
-    )
-
-    if check_clicked:
-        if _verify_secret(code_input, "map_access_code_hash", _FALLBACK_MAP_CODE_HASH):
-            _register_successful_unlock("mapcode", "map_unlocked")
-            st.session_state["map_dialog_completed"] = True
-            st.rerun()
+        if last_record is None:
+            if is_lpg_only:
+                baseline_km = LPG_INSTALL_ODO_KM
+                baseline_date = lpg_install_date
+                if item.get("first_at_km") is not None:
+                    due_km = item["first_at_km"]
+                else:
+                    due_km = baseline_km + (interval_km or 0)
+            else:
+                baseline_km = 0.0
+                baseline_date = date(CAR_MANUFACTURE_YEAR, 1, 1)
+                due_km = interval_km
         else:
-            attempts_left = _register_failed_attempt("mapcode")
-            st.error(t("code_wrong").format(attempts_left=attempts_left))
+            baseline_km = last_record.get("mileage", 0.0)
+            try:
+                baseline_date = datetime.strptime(last_record.get("date", ""), "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                baseline_date = None
+            due_km = baseline_km + (interval_km or 10 ** 9)
 
-    if close_clicked:
-        st.session_state["map_dialog_completed"] = True
-        st.session_state["map_unlocked"] = False
-        st.rerun()
+        remaining_km = (due_km - current_mileage) if due_km is not None else None
 
+        if item.get("smart_oil_forecast") and oil_adjustment_pct and remaining_km is not None:
+            remaining_km = remaining_km * (1 - oil_adjustment_pct / 100.0)
 
-def ensure_map_code_dialog_shown() -> None:
-    """Вызывать один раз в начале main(). Открывает диалог только если
-    он ещё не был пройден в этой сессии (успешно или через "Закрыть")."""
-    if "map_dialog_completed" not in st.session_state:
-        _map_access_code_dialog()
+        due_date = None
+        remaining_days = None
+        if interval_years is not None and baseline_date is not None:
+            try:
+                due_date = baseline_date.replace(year=baseline_date.year + interval_years)
+            except ValueError:
+                due_date = baseline_date + timedelta(days=365 * interval_years)
+            remaining_days = (due_date - today).days
 
+        if (remaining_km is not None and remaining_km <= 0) or (
+            remaining_days is not None and remaining_days <= 0
+        ):
+            status = "overdue"
+        elif (remaining_km is not None and remaining_km <= MAINTENANCE_SOON_KM) or (
+            remaining_days is not None and remaining_days <= MAINTENANCE_SOON_DAYS
+        ):
+            status = "soon"
+        else:
+            status = "ok"
 
-def maps_are_unlocked() -> bool:
-    return st.session_state.get("map_unlocked", False)
+        results.append(
+            {
+                "key": item["key"],
+                "remaining_km": remaining_km,
+                "remaining_days": remaining_days,
+                "status": status,
+                "oil_adjustment_pct": oil_adjustment_pct if item.get("smart_oil_forecast") else None,
+            }
+        )
 
-
-def render_maps_locked_placeholder() -> None:
-    """Аккуратная заглушка вместо карт, если код не был введён."""
-    st.info(t("maps_locked_message"))
+    return results, current_mileage, lpg_active
 
 
 # ============================================================
-# ИНТЕРФЕЙС
+# GEMINI: РАСПОЗНАВАНИЕ ФАКТУР
+# ============================================================
+
+def get_gemini_api_key() -> "str | None":
+    try:
+        return st.secrets.get("GEMINI_API_KEY")
+    except Exception:
+        return None
+
+
+def extract_invoice_data(image_bytes: bytes, mime_type: str) -> dict:
+    """Отправляет фото фактуры в Gemini 1.5 Flash и просит вернуть
+    дату/пробег/описание работ строго в формате JSON."""
+    if not GENAI_AVAILABLE:
+        return {"error": "google-generativeai не установлен"}
+    api_key = get_gemini_api_key()
+    if not api_key:
+        return {"error": "GEMINI_API_KEY не задан в Secrets"}
+
+    prompt = (
+        "Ты — эксперт по распознаванию автодокументов. Проанализируй фото "
+        "фактуры/чека на польском или русском языке. Извлеки: Дату "
+        "(ГГГГ-ММ-ДД), Пробег (числом в км), и Краткий список сделанных "
+        "работ на языке интерфейса. Верни ответ строго в формате JSON с "
+        "ключами: 'date', 'odo', 'desc'. Не выводи ничего, кроме чистого JSON."
+    )
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(
+            [prompt, {"mime_type": mime_type, "data": image_bytes}]
+        )
+        text = (response.text or "").strip().strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:].strip()
+        data = json.loads(text)
+        return data
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# ============================================================
+# DR. PRIUS: ЧТЕНИЕ ЕЖЕМЕСЯЧНЫХ CSV
+# ============================================================
+# ВАЖНО: точный формат экспорта Dr. Prius не проверялся на реальном
+# файле (в отличие от hybridassistant.db). Ниже — гибкий парсер,
+# который ищет колонки по ключевым словам и номеру блока в заголовке.
+# Если твои CSV называют колонки иначе — поправь регулярные выражения
+# в _RESISTANCE_PATTERNS / _VOLTAGE_PATTERNS / _TEMP_PATTERNS ниже.
+
+_RESISTANCE_PATTERNS = [
+    re.compile(r"(?:resistance|opor|opór|impedance|res)[_\s#]*?(\d+)", re.IGNORECASE),
+    re.compile(r"^r[_\s]?(\d+)$", re.IGNORECASE),
+]
+_VOLTAGE_PATTERNS = [
+    re.compile(r"(?:voltage|napiecie|napięcie|volt|cell)[_\s#]*?(\d+)", re.IGNORECASE),
+    re.compile(r"^[uv][_\s]?(\d+)$", re.IGNORECASE),
+]
+_TEMP_PATTERNS = [
+    re.compile(r"(?:temp|temperatura)[_\s#]*?(\d+)", re.IGNORECASE),
+]
+
+
+def _match_block_columns(columns, patterns) -> dict:
+    matches = {}
+    for col in columns:
+        col_str = str(col).strip()
+        for pat in patterns:
+            m = pat.search(col_str)
+            if m:
+                matches[int(m.group(1))] = col
+                break
+    return matches
+
+
+def parse_dr_prius_csv(df: pd.DataFrame, month_label: str) -> "dict | None":
+    """Возвращает словарь {block_num: {"resistance":.., "voltage":.., "temp":..}}
+    усреднённый по всему файлу, либо None, если колонки не распознаны."""
+    res_cols = _match_block_columns(df.columns, _RESISTANCE_PATTERNS)
+    volt_cols = _match_block_columns(df.columns, _VOLTAGE_PATTERNS)
+    temp_cols = _match_block_columns(df.columns, _TEMP_PATTERNS)
+
+    if not res_cols and not volt_cols:
+        return None
+
+    blocks = {}
+    all_block_nums = sorted(set(res_cols) | set(volt_cols) | set(temp_cols))
+    for num in all_block_nums:
+        entry = {"month": month_label}
+        if num in res_cols:
+            entry["resistance"] = pd.to_numeric(df[res_cols[num]], errors="coerce").mean()
+        if num in volt_cols:
+            entry["voltage"] = pd.to_numeric(df[volt_cols[num]], errors="coerce").mean()
+        if num in temp_cols:
+            entry["temp"] = pd.to_numeric(df[temp_cols[num]], errors="coerce").mean()
+        blocks[num] = entry
+    return blocks
+
+
+def load_dr_prius_files(uploaded_files) -> dict:
+    """Парсит все загруженные CSV. Возвращает {month_label: {block: {...}}}."""
+    result = {}
+    for uf in uploaded_files or []:
+        try:
+            raw = uf.read()
+            df = pd.read_csv(io.BytesIO(raw), sep=None, engine="python")
+        except Exception:
+            result[uf.name] = None
+            continue
+        month_label = os.path.splitext(uf.name)[0]
+        parsed = parse_dr_prius_csv(df, month_label)
+        result[uf.name] = parsed
+    return result
+
+
+# ============================================================
+# ИНТЕРФЕЙС — ОБЩЕЕ
 # ============================================================
 
 def render_sidebar():
     st.sidebar.header(t("language_label"))
     lang_display = {"ru": "Русский", "pl": "Polski"}
-    current_lang = st.session_state.get("lang", "ru")
+    current_lang = st.session_state.get("lang", "pl")
     choice = st.sidebar.selectbox(
         t("language_label"),
         options=list(lang_display.keys()),
@@ -622,168 +1136,598 @@ def render_sidebar():
         st.rerun()
 
 
-def render_analytics_tab(trips_df: pd.DataFrame, temp_df: pd.DataFrame, cell_df: pd.DataFrame):
-    if trips_df.empty and temp_df.empty:
+def _build_route_map_figure(trip_log: pd.DataFrame) -> go.Figure:
+    """Строит карту маршрута, окрашивая сегменты в синий (EV) и чёрный
+    (ДВС работает), в стиле My Toyota."""
+    fig = go.Figure()
+    points = trip_log.dropna(subset=["GPS_LAT", "GPS_LON"]).reset_index(drop=True)
+
+    if points.empty:
+        return fig
+
+    color_map = {"EV": "#0057FF", "ICE": "#111111"}
+    seg_start = 0
+    for i in range(1, len(points) + 1):
+        if i == len(points) or points.loc[i, "mode"] != points.loc[seg_start, "mode"]:
+            seg = points.loc[seg_start : i - 1 + (1 if i < len(points) else 0)]
+            mode = points.loc[seg_start, "mode"]
+            fig.add_trace(
+                go.Scattermap(
+                    lat=seg["GPS_LAT"],
+                    lon=seg["GPS_LON"],
+                    mode="lines",
+                    line=dict(width=4, color=color_map.get(mode, "#888888")),
+                    name=t("legend_ev") if mode == "EV" else t("legend_ice"),
+                    showlegend=False,
+                    hoverinfo="skip",
+                )
+            )
+            seg_start = i
+
+    center_lat = points["GPS_LAT"].mean()
+    center_lon = points["GPS_LON"].mean()
+    fig.update_layout(
+        map=dict(style="open-street-map", center=dict(lat=center_lat, lon=center_lon), zoom=12),
+        margin=dict(l=0, r=0, t=0, b=0),
+        height=450,
+        showlegend=False,
+    )
+    return fig
+
+
+def render_tab1(trips_df, fastlog_df, temp_df, cell_df):
+    if trips_df.empty:
         st.info(t("no_trip_data"))
         return
 
-    # --- Карточки метрик ---
-    total_trips = len(trips_df) if not trips_df.empty else 0
-    total_distance = trips_df["distance"].sum() if "distance" in trips_df.columns else 0
-    avg_consumption = trips_df["consumption"].mean() if "consumption" in trips_df.columns else None
-
-    latest_soh = None
-    if not cell_df.empty:
-        latest_soh = calculate_soh(cell_df.sort_values("timestamp")["cell_delta"].iloc[-1])
+    total_trips = len(trips_df)
+    total_distance = trips_df["distance"].sum()
+    avg_consumption = trips_df["consumption"].mean()
+    latest_soh = calculate_soh(cell_df.sort_values("timestamp")["cell_delta"].iloc[-1]) if not cell_df.empty else None
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric(t("metric_total_trips"), f"{total_trips}")
     col2.metric(t("metric_total_distance"), f"{total_distance:,.0f}".replace(",", " "))
     col3.metric(
         t("metric_avg_consumption"),
-        f"{avg_consumption:.1f}" if avg_consumption is not None and not pd.isna(avg_consumption) else "—",
+        f"{avg_consumption:.1f}" if pd.notna(avg_consumption) else "—",
     )
-    col4.metric(
-        t("metric_soh"),
-        f"{latest_soh:.0f}%" if latest_soh is not None else "—",
-    )
+    col4.metric(t("metric_soh"), f"{latest_soh:.0f}%" if latest_soh is not None else "—")
 
     st.divider()
 
-    # --- График 1: расход топлива по поездкам ---
-    trips_with_consumption = trips_df.dropna(subset=["consumption"]) if "consumption" in trips_df.columns else pd.DataFrame()
-    if not trips_with_consumption.empty:
-        fig1 = go.Figure()
-        fig1.add_trace(
-            go.Scatter(
-                x=list(range(1, len(trips_with_consumption) + 1)),
-                y=trips_with_consumption["consumption"],
-                mode="lines+markers",
-                name=t("chart1_y"),
-                line=dict(color="#1f77b4"),
-                hovertext=trips_with_consumption["date"].dt.strftime("%Y-%m-%d %H:%M"),
-            )
-        )
-        fig1.update_layout(
-            title=t("chart1_title"),
-            xaxis_title=t("chart1_x"),
-            yaxis_title=t("chart1_y"),
-            height=400,
-        )
-        st.plotly_chart(fig1, use_container_width=True)
-    else:
-        st.info(t("no_trip_data"))
+    # --- Карты ---
+    if maps_are_unlocked():
+        st.subheader(t("map_section_title"))
+        trip_options = {
+            f"{row['date'].strftime('%Y-%m-%d %H:%M')} — {row['distance']:.1f} км": idx
+            for idx, row in trips_df.iterrows()
+        }
+        if trip_options and not fastlog_df.empty:
+            selected_label = st.selectbox(t("map_select_trip"), list(trip_options.keys()))
+            sel_idx = trip_options[selected_label]
+            sel_row = trips_df.loc[sel_idx]
+            mask = (fastlog_df["TIMESTAMP"] >= sel_row["TSDEB"]) & (fastlog_df["TIMESTAMP"] <= sel_row["TSFIN"])
+            trip_log = fastlog_df.loc[mask]
+            if trip_log[["GPS_LAT", "GPS_LON"]].dropna().empty:
+                st.info(t("no_gps_data"))
+            else:
+                st.plotly_chart(_build_route_map_figure(trip_log), use_container_width=True)
 
-    # --- График 2: SOH во времени ---
+            ev_pct = sel_row.get("ev_pct")
+            ice_pct = 100 - ev_pct if pd.notna(ev_pct) else None
+            mcol1, mcol2, mcol3, mcol4, mcol5 = st.columns(5)
+            mcol1.metric(t("metric_total_distance"), f"{sel_row['distance']:.1f}")
+            mcol2.metric(t("metric_ev_pct"), f"{ev_pct:.0f}%" if pd.notna(ev_pct) else "—")
+            mcol3.metric(t("metric_ice_pct"), f"{ice_pct:.0f}%" if ice_pct is not None else "—")
+            mcol4.metric(t("metric_fuel_ml"), f"{sel_row['fuel_ml']:.0f}" if pd.notna(sel_row.get("fuel_ml")) else "—")
+            mcol5.metric(t("metric_brake_events"), f"{int(sel_row['brake_events'])}" if pd.notna(sel_row.get("brake_events")) else "—")
+        else:
+            st.info(t("no_gps_data"))
+
+        st.subheader(t("map_period_title"))
+        period_options = {
+            t("map_period_day"): "D",
+            t("map_period_week"): "W",
+            t("map_period_month"): "M",
+            t("map_period_year"): "Y",
+        }
+        period_label = st.selectbox(t("map_period_label"), list(period_options.keys()), key="period_select")
+        freq = period_options[period_label]
+        if not fastlog_df.empty:
+            latest_ts = fastlog_df["datetime"].max()
+            period_start = {
+                "D": latest_ts.normalize(),
+                "W": latest_ts - timedelta(days=7),
+                "M": latest_ts - timedelta(days=30),
+                "Y": latest_ts - timedelta(days=365),
+            }[freq]
+            period_df = fastlog_df[fastlog_df["datetime"] >= period_start]
+            period_trips = trips_df[trips_df["date"] >= period_start]
+            period_avg_consumption = period_trips["consumption"].mean()
+
+            points = period_df.dropna(subset=["GPS_LAT", "GPS_LON"])
+            if not points.empty:
+                grid_fig = go.Figure(
+                    go.Scattermap(
+                        lat=points["GPS_LAT"],
+                        lon=points["GPS_LON"],
+                        mode="markers",
+                        marker=dict(size=4, color="#0057FF", opacity=0.4),
+                        hoverinfo="skip",
+                    )
+                )
+                grid_fig.update_layout(
+                    map=dict(
+                        style="open-street-map",
+                        center=dict(lat=points["GPS_LAT"].mean(), lon=points["GPS_LON"].mean()),
+                        zoom=10,
+                    ),
+                    margin=dict(l=0, r=0, t=0, b=0),
+                    height=400,
+                )
+                st.plotly_chart(grid_fig, use_container_width=True)
+                if pd.notna(period_avg_consumption):
+                    st.markdown(
+                        f"### {t('map_period_avg_consumption').format(value=f'{period_avg_consumption:.1f}')}"
+                    )
+            else:
+                st.info(t("no_gps_data"))
+    else:
+        render_maps_locked_placeholder()
+
+    st.divider()
+
+    # --- Экспертные параметры ---
+    st.subheader(t("expert_params_title"))
+    ecol1, ecol2 = st.columns(2)
+    with ecol1:
+        st.markdown(f"**{t('ltft_title')}**")
+        ltft_post_lpg = trips_df.loc[trips_df.get("avg_ltft").notna(), "avg_ltft"] if "avg_ltft" in trips_df else pd.Series(dtype=float)
+        if not ltft_post_lpg.empty:
+            ltft_avg = ltft_post_lpg.mean()
+            st.metric("LTFT", f"{ltft_avg:.1f}%")
+            if ltft_avg < LTFT_WARNING_MIN or ltft_avg > LTFT_WARNING_MAX:
+                st.warning(t("ltft_warning"))
+        else:
+            st.info(t("not_enough_data"))
+    with ecol2:
+        st.markdown(f"**{t('hv_safety_title')}**")
+        st.info(t("hv_safety_no_data"))
+
+    st.divider()
+
+    # --- Smart Diagnostics ---
+    st.subheader(t("smart_diag_title"))
+    dcol1, dcol2 = st.columns(2)
+    with dcol1:
+        st.markdown(f"**{t('soh_forecast_title')}**")
+        if not cell_df.empty and len(cell_df) >= 5:
+            x = (cell_df["timestamp"] - cell_df["timestamp"].min()).dt.total_seconds().to_numpy()
+            y = cell_df["cell_delta"].to_numpy()
+            slope, intercept = np.polyfit(x, y, 1)
+            if slope > 0:
+                seconds_to_critical = (SOH_DELTA_MAX - intercept) / slope - x.max()
+                if seconds_to_critical > 0:
+                    days = int(seconds_to_critical / 86400)
+                    forecast_date = (cell_df["timestamp"].max() + timedelta(seconds=seconds_to_critical)).strftime("%Y-%m-%d")
+                    st.warning(t("soh_forecast_result").format(days=days, date=forecast_date))
+                else:
+                    st.warning(t("soh_forecast_result").format(days=0, date=t("not_enough_data")))
+            else:
+                st.success(t("soh_forecast_stable"))
+        else:
+            st.info(t("not_enough_data"))
+    with dcol2:
+        st.markdown(f"**{t('radiator_forecast_title')}**")
+        if not temp_df.empty and "ambient_temp" in temp_df.columns and len(temp_df) >= 20:
+            df = temp_df.dropna(subset=["ambient_temp", "inverter_temp"]).copy()
+            if len(df) >= 20:
+                df["diff"] = df["inverter_temp"] - df["ambient_temp"]
+                x = (df["datetime"] - df["datetime"].min()).dt.total_seconds().to_numpy()
+                y = df["diff"].to_numpy()
+                slope, _ = np.polyfit(x, y, 1)
+                slope_per_month = slope * 86400 * 30
+                if slope_per_month > 0.5:
+                    st.warning(t("radiator_forecast_result").format(value=f"{slope_per_month:.1f}"))
+                else:
+                    st.success(t("radiator_forecast_stable"))
+            else:
+                st.info(t("not_enough_data"))
+        else:
+            st.info(t("not_enough_data"))
+
+
+def render_tab2(trips_df, fastlog_df, db_path, file_version):
+    if trips_df.empty or fastlog_df.empty:
+        st.info(t("no_trip_data"))
+        return
+
+    trip_options = {
+        f"{row['date'].strftime('%Y-%m-%d %H:%M')} — {row['distance']:.1f} км": idx
+        for idx, row in trips_df.iterrows()
+    }
+    selected_label = st.selectbox(t("logs_select_trip"), list(trip_options.keys()), key="tab2_trip_select")
+    sel_idx = trip_options[selected_label]
+    sel_row = trips_df.loc[sel_idx]
+    mask = (fastlog_df["TIMESTAMP"] >= sel_row["TSDEB"]) & (fastlog_df["TIMESTAMP"] <= sel_row["TSFIN"])
+    trip_log = fastlog_df.loc[mask].sort_values("TIMESTAMP")
+
+    if trip_log.empty:
+        st.info(t("no_log_data"))
+        return
+
+    # 1. Скорость и обороты ДВС
+    st.markdown(f"#### {t('logs_chart_speed_rpm')}")
+    fig1 = go.Figure()
+    fig1.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["SPEED_OBD"], name="Speed (км/ч)", line=dict(color="#1f77b4")))
+    fig1.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["ICE_RPM"], name="ICE RPM", yaxis="y2", line=dict(color="#d62728")))
+    fig1.update_layout(
+        yaxis=dict(title="км/ч"),
+        yaxis2=dict(title="об/мин", overlaying="y", side="right"),
+        height=380,
+        legend=dict(orientation="h"),
+    )
+    st.plotly_chart(fig1, use_container_width=True)
+
+    # 2. Напряжение и ток батареи
+    st.markdown(f"#### {t('logs_chart_hv')}")
+    fig2 = go.Figure()
+    fig2.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["HV_V"], name="HV_V (В)", line=dict(color="#2ca02c")))
+    fig2.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["HV_A"], name="HV_A (А)", yaxis="y2", line=dict(color="#ff7f0e")))
+    fig2.update_layout(
+        yaxis=dict(title="В"),
+        yaxis2=dict(title="А", overlaying="y", side="right"),
+        height=380,
+        legend=dict(orientation="h"),
+    )
+    st.plotly_chart(fig2, use_container_width=True)
+
+    # 3. Температуры
+    st.markdown(f"#### {t('logs_chart_temps')}")
+    fig3 = go.Figure()
+    fig3.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["ICE_TEMP"], name="ДВС", line=dict(color="#d62728")))
+    fig3.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["INVERTER_TEMP"], name="Инвертор", line=dict(color="#ff7f0e")))
+    fig3.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["BATTERY_TEMP"], name="ВВБ (среднее)", line=dict(color="#9467bd")))
+
+    battlog = load_battlog_probes(db_path, file_version) if db_path else pd.DataFrame()
+    if not battlog.empty:
+        probe_mask = (battlog["TIMESTAMP"] >= sel_row["TSDEB"]) & (battlog["TIMESTAMP"] <= sel_row["TSFIN"])
+        probe_log = battlog.loc[probe_mask]
+        probe_cols = [c for c in ["TB1", "TB2", "TB3"] if c in probe_log.columns and probe_log[c].notna().any()]
+        if probe_cols:
+            for c in probe_cols:
+                fig3.add_trace(go.Scatter(x=probe_log["datetime"], y=probe_log[c], name=f"ВВБ {c}", line=dict(dash="dot")))
+            st.caption(t("logs_battlog_note"))
+        else:
+            st.caption(t("logs_no_battlog"))
+    else:
+        st.caption(t("logs_no_battlog"))
+
+    fig3.update_layout(yaxis=dict(title="°C"), height=380, legend=dict(orientation="h"))
+    st.plotly_chart(fig3, use_container_width=True)
+
+    # 4. MG1/MG2
+    st.markdown(f"#### {t('logs_chart_mg')}")
+    fig4 = go.Figure()
+    fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG1_TORQUE"], name="MG1 момент (Нм)", line=dict(color="#17becf")))
+    fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG2_TORQUE"], name="MG2 момент (Нм)", line=dict(color="#bcbd22")))
+    fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG1_RPM"], name="MG1 об/мин", yaxis="y2", line=dict(color="#17becf", dash="dot")))
+    fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG2_RPM"], name="MG2 об/мин", yaxis="y2", line=dict(color="#bcbd22", dash="dot")))
+    fig4.update_layout(
+        yaxis=dict(title="Нм"),
+        yaxis2=dict(title="об/мин", overlaying="y", side="right"),
+        height=380,
+        legend=dict(orientation="h"),
+    )
+    st.plotly_chart(fig4, use_container_width=True)
+    st.caption(t("logs_mg_note"))
+
+
+def render_tab3():
+    st.file_uploader(
+        t("drprius_upload_label"),
+        type=["csv"],
+        accept_multiple_files=True,
+        help=t("drprius_upload_help"),
+        key="drprius_uploader",
+    )
+    uploaded_files = st.session_state.get("drprius_uploader")
+
+    if not uploaded_files:
+        st.info(t("drprius_no_files"))
+        return
+
+    parsed_by_file = load_dr_prius_files(uploaded_files)
+    all_blocks_by_month = {}
+    for fname, blocks in parsed_by_file.items():
+        if blocks is None:
+            st.warning(t("drprius_parse_error").format(name=fname))
+            continue
+        month_label = os.path.splitext(fname)[0]
+        all_blocks_by_month[month_label] = blocks
+
+    if not all_blocks_by_month:
+        return
+
+    latest_month = list(all_blocks_by_month.keys())[-1]
+    latest_blocks = all_blocks_by_month[latest_month]
+
+    block_nums = sorted(latest_blocks.keys())
+    resistances = [latest_blocks[b].get("resistance") for b in block_nums]
+    voltages = [latest_blocks[b].get("voltage") for b in block_nums]
+    temps = [latest_blocks[b].get("temp") for b in block_nums]
+
+    if any(r is not None for r in resistances):
+        st.markdown(f"#### {t('drprius_resistance_chart')}")
+        fig_r = go.Figure(go.Bar(x=[f"#{b}" for b in block_nums], y=resistances, marker_color="#ff7f0e"))
+        fig_r.update_layout(height=350)
+        st.plotly_chart(fig_r, use_container_width=True)
+
+    if any(v is not None for v in voltages):
+        st.markdown(f"#### {t('drprius_voltage_chart')}")
+        fig_v = go.Figure(go.Bar(x=[f"#{b}" for b in block_nums], y=voltages, marker_color="#2ca02c"))
+        fig_v.update_layout(height=350)
+        st.plotly_chart(fig_v, use_container_width=True)
+
+    st.divider()
+    st.markdown(f"#### {t('drprius_wear_title')}")
+    months_sorted = list(all_blocks_by_month.keys())
+    if len(months_sorted) < 2:
+        st.info(t("drprius_need_two_months"))
+    else:
+        common_blocks = set.intersection(
+            *[set(all_blocks_by_month[m].keys()) for m in months_sorted]
+        )
+        slopes = {}
+        for b in common_blocks:
+            series = [all_blocks_by_month[m][b].get("resistance") for m in months_sorted]
+            if any(v is None or pd.isna(v) for v in series):
+                continue
+            slope = np.polyfit(range(len(series)), series, 1)[0]
+            slopes[b] = slope
+        if slopes:
+            median_slope = float(np.median(list(slopes.values())))
+            fast_blocks = [b for b, s in slopes.items() if s > median_slope * 1.5 and s > 0]
+            if fast_blocks:
+                st.warning(t("drprius_wear_result").format(blocks=", ".join(f"#{b}" for b in fast_blocks)))
+            else:
+                st.success(t("drprius_wear_ok"))
+        else:
+            st.info(t("not_enough_data"))
+
+    st.divider()
+    st.markdown(f"#### {t('drprius_temp_spread_title')}")
+    if any(v is not None for v in temps):
+        valid_temps = [v for v in temps if v is not None and pd.notna(v)]
+        if len(valid_temps) >= 2:
+            spread = max(valid_temps) - min(valid_temps)
+            if spread > 5:
+                st.warning(t("drprius_temp_spread_warning").format(value=f"{spread:.1f}"))
+            else:
+                st.success(t("drprius_temp_spread_ok").format(value=f"{spread:.1f}"))
+        else:
+            st.info(t("not_enough_data"))
+    else:
+        st.info(t("not_enough_data"))
+
+
+def render_tab4(trips_df, temp_df, cell_df):
+    st.markdown(f"#### {t('compare_table_title')}")
+
+    dr_files = st.session_state.get("drprius_uploader")
+    dr_parsed = load_dr_prius_files(dr_files) if dr_files else {}
+    dr_months = {
+        os.path.splitext(fname)[0]: blocks
+        for fname, blocks in dr_parsed.items()
+        if blocks is not None
+    }
+
+    if not temp_df.empty:
+        temp_df = temp_df.copy()
+        temp_df["month"] = temp_df["datetime"].dt.strftime("%Y-%m")
+        available_months = sorted(temp_df["month"].dropna().unique())
+    else:
+        available_months = []
+
+    if not available_months:
+        st.info(t("not_enough_data"))
+        return
+
+    selected_month = st.selectbox(t("compare_select_month"), available_months, index=len(available_months) - 1)
+
+    ha_peak_temp = temp_df.loc[temp_df["month"] == selected_month, "battery_temp"].max()
+
+    ha_soh = None
+    ha_delta = None
     if not cell_df.empty:
+        cell_df_m = cell_df.copy()
+        cell_df_m["month"] = cell_df_m["timestamp"].dt.strftime("%Y-%m")
+        month_cells = cell_df_m.loc[cell_df_m["month"] == selected_month, "cell_delta"]
+        if not month_cells.empty:
+            ha_delta = month_cells.max()
+            ha_soh = calculate_soh(ha_delta)
+
+    dr_blocks = dr_months.get(selected_month)
+    dr_voltages = None
+    if dr_blocks:
+        vals = [b.get("voltage") for b in dr_blocks.values() if b.get("voltage") is not None]
+        if vals:
+            dr_voltages = (max(vals) - min(vals)) / 1000.0  # мВ -> В
+
+    rows = []
+
+    def _fmt(v, suffix=""):
+        return f"{v:.2f}{suffix}" if v is not None and pd.notna(v) else t("compare_na")
+
+    soh_diff_flag = (
+        t("compare_diff_high")
+        if ha_soh is not None and dr_voltages is not None and abs(ha_soh - 100) > SOH_DIFF_THRESHOLD
+        else t("compare_diff_ok")
+    )
+    rows.append(
+        {
+            t("compare_col_metric"): t("compare_metric_soh"),
+            t("compare_col_ha"): _fmt(ha_soh),
+            t("compare_col_drprius"): t("compare_na"),
+            t("compare_col_diff_flag"): t("compare_na") if dr_voltages is None else soh_diff_flag,
+        }
+    )
+
+    delta_diff_flag = (
+        t("compare_diff_high")
+        if ha_delta is not None and dr_voltages is not None and abs(ha_delta - dr_voltages) > DELTA_V_DIFF_THRESHOLD
+        else t("compare_diff_ok")
+    )
+    rows.append(
+        {
+            t("compare_col_metric"): t("compare_metric_delta"),
+            t("compare_col_ha"): _fmt(ha_delta),
+            t("compare_col_drprius"): _fmt(dr_voltages),
+            t("compare_col_diff_flag"): t("compare_na") if dr_voltages is None else delta_diff_flag,
+        }
+    )
+
+    rows.append(
+        {
+            t("compare_col_metric"): t("compare_metric_peak_temp"),
+            t("compare_col_ha"): _fmt(ha_peak_temp),
+            t("compare_col_drprius"): t("compare_na"),
+            t("compare_col_diff_flag"): t("compare_na"),
+        }
+    )
+
+    rows.append(
+        {
+            t("compare_col_metric"): t("compare_metric_ah"),
+            t("compare_col_ha"): f"{FACTORY_AH_CAPACITY_REFERENCE:.1f} Ah",
+            t("compare_col_drprius"): t("compare_na"),
+            t("compare_col_diff_flag"): t("compare_na"),
+        }
+    )
+
+    df_compare = pd.DataFrame(rows)
+
+    def _highlight(row):
+        color = "color: red; font-weight: bold" if row[t("compare_col_diff_flag")] == t("compare_diff_high") else ""
+        return [color] * len(row)
+
+    st.dataframe(df_compare.style.apply(_highlight, axis=1), use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    if not cell_df.empty:
+        st.markdown(f"#### {t('compare_trend_soh')}")
         soh_series = cell_df["cell_delta"].apply(calculate_soh)
-        fig2 = go.Figure()
-        fig2.add_trace(
-            go.Scatter(
-                x=cell_df["timestamp"],
-                y=soh_series,
-                mode="lines+markers",
-                name=t("chart2_y"),
-                line=dict(color="#2ca02c"),
-            )
-        )
-        fig2.update_layout(
-            title=t("chart2_title"),
-            xaxis_title=t("chart2_x"),
-            yaxis_title=t("chart2_y"),
-            yaxis_range=[0, 105],
-            height=400,
-        )
-        st.plotly_chart(fig2, use_container_width=True)
-        source = cell_df["source"].iloc[-1] if "source" in cell_df.columns else None
-        if source == "battlog":
-            st.caption(t("chart2_source_battlog"))
-        elif source == "hvcheck":
-            st.caption(t("chart2_source_hvcheck"))
+        fig_soh = go.Figure(go.Scatter(x=cell_df["timestamp"], y=soh_series, mode="lines+markers"))
+        fig_soh.update_layout(height=300, yaxis_title="SOH %")
+        st.plotly_chart(fig_soh, use_container_width=True)
+
+        st.markdown(f"#### {t('compare_trend_delta')}")
+        fig_delta = go.Figure(go.Scatter(x=cell_df["timestamp"], y=cell_df["cell_delta"], mode="lines+markers"))
+        fig_delta.update_layout(height=300, yaxis_title="Delta, В")
+        st.plotly_chart(fig_delta, use_container_width=True)
     else:
         st.info(t("no_cell_data"))
 
-    # --- График 3: температуры узлов ---
-    temp_cols = [c for c in ("engine_temp", "inverter_temp", "battery_temp") if c in temp_df.columns]
-    if not temp_df.empty and temp_cols:
-        fig3 = go.Figure()
-        color_map = {
-            "engine_temp": ("#d62728", t("legend_engine")),
-            "inverter_temp": ("#ff7f0e", t("legend_inverter")),
-            "battery_temp": ("#9467bd", t("legend_battery")),
-        }
-        for col in temp_cols:
-            color, label = color_map[col]
-            fig3.add_trace(
-                go.Scatter(
-                    x=temp_df["timestamp"],
-                    y=temp_df[col],
-                    mode="lines",
-                    name=label,
-                    line=dict(color=color),
-                )
-            )
-        fig3.update_layout(
-            title=t("chart3_title"),
-            xaxis_title=t("chart3_x"),
-            yaxis_title=t("chart3_y"),
-            height=400,
-        )
-        st.plotly_chart(fig3, use_container_width=True)
-
-        if temp_df.attrs.get("resampled"):
-            st.caption(t("chart3_resampled").format(points=temp_df.attrs.get("original_points", "?")))
-
-        # Предупреждения о перегреве
-        if "inverter_temp" in temp_df.columns:
-            max_inv = temp_df["inverter_temp"].max()
-            if pd.notna(max_inv) and max_inv > INVERTER_TEMP_LIMIT:
-                st.warning(
-                    t("warning_inverter").format(limit=INVERTER_TEMP_LIMIT, value=round(max_inv, 1))
-                )
-        if "engine_temp" in temp_df.columns:
-            max_eng = temp_df["engine_temp"].max()
-            if pd.notna(max_eng) and max_eng > ENGINE_TEMP_LIMIT:
-                st.warning(
-                    t("warning_engine").format(limit=ENGINE_TEMP_LIMIT, value=round(max_eng, 1))
-                )
+    st.markdown(f"#### {t('compare_trend_seasonal')}")
+    if not temp_df.empty:
+        years_present = temp_df["datetime"].dt.year.nunique()
+        if years_present < 2:
+            st.info(t("compare_seasonal_not_enough"))
+        else:
+            seasonal = temp_df.copy()
+            seasonal["year"] = seasonal["datetime"].dt.year
+            seasonal["month_num"] = seasonal["datetime"].dt.month
+            summer = seasonal[seasonal["month_num"].isin([6, 7, 8])]
+            pivot = summer.groupby(["year", "month_num"])["battery_temp"].mean().reset_index()
+            fig_season = go.Figure()
+            for yr in sorted(pivot["year"].unique()):
+                sub = pivot[pivot["year"] == yr]
+                fig_season.add_trace(go.Scatter(x=sub["month_num"], y=sub["battery_temp"], name=str(yr), mode="lines+markers"))
+            fig_season.update_layout(height=300, xaxis_title="Месяц", yaxis_title="°C ВВБ")
+            st.plotly_chart(fig_season, use_container_width=True)
     else:
-        st.info(t("no_log_data"))
+        st.info(t("not_enough_data"))
 
 
-def render_maintenance_tab():
+def render_tab5(db_path, file_version):
     st.subheader(t("maintenance_title"))
 
     records = load_maintenance()
     if records:
         df = pd.DataFrame(records)
-        df = df.rename(
-            columns={
-                "date": t("col_date"),
-                "mileage": t("col_mileage"),
-                "description": t("col_description"),
-            }
+        df_display = df.rename(
+            columns={"date": t("col_date"), "mileage": t("col_mileage"), "description": t("col_description")}
         )
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
     else:
         st.info(t("maintenance_empty"))
 
     st.divider()
+    st.subheader(t("maintenance_status_title"))
+
+    status_list, current_mileage, lpg_active = compute_maintenance_status(db_path, file_version, records)
+    st.caption(t("maintenance_current_mileage").format(value=f"{current_mileage:,.0f}".replace(",", " ")))
+    if lpg_active:
+        st.caption(t("lpg_installed_note"))
+
+    item_labels = {
+        "oil": {"ru": "Моторное масло 0W-16", "pl": "Olej silnikowy 0W-16"},
+        "spark_plugs": {"ru": "Свечи зажигания", "pl": "Świece zapłonowe"},
+        "brake_fluid": {"ru": "Тормозная жидкость", "pl": "Płyn hamulcowy"},
+        "coolant": {"ru": "Антифриз SLLC", "pl": "Płyn chłodniczy SLLC"},
+        "air_filter": {"ru": "Воздушный фильтр", "pl": "Filtr powietrza"},
+        "lpg_filters": {"ru": "Фильтры ГБО", "pl": "Filtry LPG"},
+        "lpg_valves": {"ru": "Зазоры клапанов (ГБО)", "pl": "Luzy zaworowe (LPG)"},
+    }
+    status_icon = {
+        "overdue": t("maintenance_status_overdue"),
+        "soon": t("maintenance_status_soon"),
+        "ok": t("maintenance_status_ok"),
+    }
+
+    lang = st.session_state.get("lang", "pl")
+    for item in status_list:
+        label = item_labels.get(item["key"], {}).get(lang, item["key"])
+        cols = st.columns([3, 2, 2, 2])
+        cols[0].markdown(f"**{label}**")
+        cols[1].markdown(status_icon[item["status"]])
+        if item["remaining_km"] is not None:
+            cols[2].markdown(t("maintenance_status_km_left").format(km=f"{item['remaining_km']:,.0f}".replace(",", " ")))
+        if item["remaining_days"] is not None:
+            cols[3].markdown(t("maintenance_status_days_left").format(days=item["remaining_days"]))
+        if item.get("oil_adjustment_pct"):
+            st.caption(t("smart_oil_hint").format(pct=item["oil_adjustment_pct"]))
+
+    st.divider()
     st.subheader(t("add_record_header"))
 
-    remaining = _lockout_remaining_seconds("maintenance")
+    # --- Распознавание фактуры через Gemini ---
+    if GENAI_AVAILABLE and get_gemini_api_key():
+        uploaded_invoice = st.file_uploader(t("invoice_upload_label"), type=["jpg", "jpeg", "png"], key="invoice_uploader")
+        if uploaded_invoice is not None and st.session_state.get("last_invoice_name") != uploaded_invoice.name:
+            with st.spinner(t("invoice_processing")):
+                data = extract_invoice_data(uploaded_invoice.getvalue(), uploaded_invoice.type or "image/jpeg")
+            st.session_state["last_invoice_name"] = uploaded_invoice.name
+            if "error" in data:
+                st.error(t("invoice_error").format(error=data["error"]))
+            else:
+                st.session_state["invoice_prefill_date"] = data.get("date")
+                st.session_state["invoice_prefill_odo"] = data.get("odo")
+                st.session_state["invoice_prefill_desc"] = data.get("desc")
+                st.success(t("invoice_success"))
+    else:
+        st.caption(t("invoice_unavailable"))
 
+    remaining = _lockout_remaining_seconds("maintenance")
     if remaining > 0:
-        # Слишком много неверных попыток — форма ввода пароля временно скрыта.
         minutes, seconds = divmod(remaining, 60)
         st.error(t("password_locked").format(minutes=minutes, seconds=seconds))
         return
 
     if not st.session_state.get("maintenance_unlocked", False):
-        password_input = st.text_input(
-            t("password_label"), type="password", key="maintenance_password_input"
-        )
-
+        password_input = st.text_input(t("password_label"), type="password", key="maintenance_password_input")
         if password_input == "":
             st.info(t("password_needed"))
         elif _verify_secret(password_input, "maintenance_password_hash", _FALLBACK_PASSWORD_HASH):
@@ -794,16 +1738,23 @@ def render_maintenance_tab():
             st.error(t("password_wrong").format(attempts_left=attempts_left))
         return
 
-    # --- Доступ разблокирован для текущей сессии ---
     st.success(t("password_unlocked"))
     if st.button(t("lock_again_button")):
         st.session_state["maintenance_unlocked"] = False
         st.rerun()
 
+    prefill_date = st.session_state.get("invoice_prefill_date")
+    try:
+        prefill_date_value = datetime.strptime(prefill_date, "%Y-%m-%d").date() if prefill_date else date.today()
+    except (ValueError, TypeError):
+        prefill_date_value = date.today()
+    prefill_odo = st.session_state.get("invoice_prefill_odo") or 0
+    prefill_desc = st.session_state.get("invoice_prefill_desc") or ""
+
     with st.form("maintenance_form", clear_on_submit=True):
-        record_date = st.date_input(t("form_date"), value=date.today())
-        record_mileage = st.number_input(t("form_mileage"), min_value=0, step=100)
-        record_description = st.text_area(t("form_description"))
+        record_date = st.date_input(t("form_date"), value=prefill_date_value)
+        record_mileage = st.number_input(t("form_mileage"), min_value=0, step=100, value=int(prefill_odo) if prefill_odo else 0)
+        record_description = st.text_area(t("form_description"), value=prefill_desc)
         submitted = st.form_submit_button(t("save_button"))
 
         if submitted:
@@ -817,13 +1768,16 @@ def render_maintenance_tab():
                         "description": record_description.strip(),
                     }
                 )
+                st.session_state.pop("invoice_prefill_date", None)
+                st.session_state.pop("invoice_prefill_odo", None)
+                st.session_state.pop("invoice_prefill_desc", None)
                 st.success(t("save_success"))
                 st.rerun()
 
 
 def main():
     if "lang" not in st.session_state:
-        st.session_state["lang"] = "ru"
+        st.session_state["lang"] = "pl"
 
     st.set_page_config(page_title=t("page_title"), page_icon="🚗", layout="wide")
 
@@ -833,24 +1787,27 @@ def main():
 
     st.title(t("app_title"))
 
-    tab1, tab2 = st.tabs([t("tab1"), t("tab2")])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        [t("tab1"), t("tab2"), t("tab3"), t("tab4"), t("tab5")]
+    )
 
     trips_df = pd.DataFrame()
+    fastlog_df = pd.DataFrame()
     temp_df = pd.DataFrame()
     cell_df = pd.DataFrame()
     db_ok = True
     db_missing = False
     db_error_message = None
     db_path = None
+    file_version = None
 
     with st.spinner(t("downloading_db")):
         try:
             db_path = download_database()
         except RuntimeError:
-            # Файл не расшарен по ссылке, ссылка неверна, или скачался пустым.
             db_ok = False
             db_missing = True
-        except Exception as e:  # сетевые сбои, недоступность Google Диска и т.п.
+        except Exception as e:
             db_ok = False
             db_error_message = str(e)
 
@@ -858,33 +1815,44 @@ def main():
         file_version = os.path.getmtime(db_path)
         st.sidebar.caption(
             t("db_last_loaded").format(
-                timestamp=pd.to_datetime(file_version, unit="s").strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
+                timestamp=pd.to_datetime(file_version, unit="s").strftime("%Y-%m-%d %H:%M:%S")
             )
         )
         try:
-            trips_df = load_trips_with_consumption(db_path, file_version)
+            trips_df = load_trips_full(db_path, file_version)
+            fastlog_df = load_fastlog_full(db_path, file_version)
             temp_df = load_temperature_log(db_path, file_version)
             cell_df = load_cell_delta_series(db_path, file_version)
         except sqlite3.Error as e:
             db_ok = False
             db_error_message = str(e)
-        except Exception as e:  # защитный общий catch, чтобы приложение не падало
+        except Exception as e:
             db_ok = False
             db_error_message = str(e)
 
     with tab1:
         if not db_ok:
-            if db_missing:
-                st.warning(t("db_missing"))
-            else:
-                st.error(t("db_error").format(error=db_error_message))
+            st.warning(t("db_missing")) if db_missing else st.error(t("db_error").format(error=db_error_message))
         else:
-            render_analytics_tab(trips_df, temp_df, cell_df)
+            render_tab1(trips_df, fastlog_df, temp_df, cell_df)
 
     with tab2:
-        render_maintenance_tab()
+        if not db_ok:
+            st.warning(t("db_missing")) if db_missing else st.error(t("db_error").format(error=db_error_message))
+        else:
+            render_tab2(trips_df, fastlog_df, db_path, file_version)
+
+    with tab3:
+        render_tab3()
+
+    with tab4:
+        if not db_ok:
+            st.warning(t("db_missing")) if db_missing else st.error(t("db_error").format(error=db_error_message))
+        else:
+            render_tab4(trips_df, temp_df, cell_df)
+
+    with tab5:
+        render_tab5(db_path, file_version)
 
 
 if __name__ == "__main__":
