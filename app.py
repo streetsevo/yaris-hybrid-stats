@@ -58,6 +58,7 @@ import io
 import json
 import os
 import re
+import shutil
 import sqlite3
 import time
 from datetime import date, datetime, timedelta
@@ -81,12 +82,25 @@ except ImportError:
 # ============================================================
 
 # --- Источник основной базы данных: Google Диск ---
-GDRIVE_FILE_ID = "1VrS5Kh-a1lh_P-FWNMyolVeigenI6dLa"
-LOCAL_DB_CACHE_PATH = "/tmp/hybridassistant_downloaded.db"
+GDRIVE_FOLDER_ID = "1euBXP38wifqzXUSv0RkySvbtmoUQ_HTL"
+LOCAL_DB_FOLDER_PATH = "/tmp/hybridassistant_folder"
 DB_CACHE_TTL_SECONDS = 30 * 60  # 30 минут между автоматическими обновлениями
 
 MAINTENANCE_FILE = "maintenance.json"
 DR_PRIUS_UPLOAD_DIR = "/tmp/dr_prius_logs"
+
+# Hybrid Assistant хранит все TIMESTAMP/TSDEB/TSFIN в миллисекундах
+# UTC-времени. Машина и водитель — в Польше, поэтому для отображения
+# конвертируем в локальное время Europe/Warsaw (с учётом перехода на
+# летнее время), иначе часы на графиках/в списке поездок не совпадают
+# с реальными часами на телефоне.
+LOCAL_TIMEZONE = "Europe/Warsaw"
+
+
+def _ms_to_local_datetime(ms_series: pd.Series) -> pd.Series:
+    """Мс Unix-времени (UTC) -> наивный локальный datetime (Europe/Warsaw)."""
+    dt_utc = pd.to_datetime(ms_series, unit="ms", errors="coerce", utc=True)
+    return dt_utc.dt.tz_convert(LOCAL_TIMEZONE).dt.tz_localize(None)
 
 # --- Защита формы ТО и кода доступа к картам ---
 # Секреты НИКОГДА не хранятся в коде в открытом виде — только их
@@ -231,8 +245,13 @@ TR = {
         "metric_fuel_ml": "Расход топлива, мл",
         "metric_brake_events": "Механических торможений",
         # --- Карты ---
-        "map_section_title": "🗺️ Карта поездки (стиль My Toyota)",
+        "map_section_title": "🗺️ Карта поездки",
         "map_select_trip": "Выберите поездку",
+        "map_param_label": "Показатель на карте",
+        "map_param_mode": "Режим (EV / ДВС)",
+        "map_param_braking": "Торможение",
+        "map_param_speed": "Скорость",
+        "map_param_soc": "Заряд батареи (SOC)",
         "map_period_title": "🗺️ Карта за период",
         "map_period_label": "Период",
         "map_period_day": "День",
@@ -372,8 +391,13 @@ TR = {
         "metric_ice_pct": "% trasy na silniku",
         "metric_fuel_ml": "Zużyte paliwo, ml",
         "metric_brake_events": "Hamowań mechanicznych",
-        "map_section_title": "🗺️ Mapa przejazdu (styl My Toyota)",
+        "map_section_title": "🗺️ Mapa przejazdu",
         "map_select_trip": "Wybierz przejazd",
+        "map_param_label": "Parametr na mapie",
+        "map_param_mode": "Tryb (EV / silnik)",
+        "map_param_braking": "Hamowanie",
+        "map_param_speed": "Prędkość",
+        "map_param_soc": "Poziom naładowania (SOC)",
         "map_period_title": "🗺️ Mapa za okres",
         "map_period_label": "Okres",
         "map_period_day": "Dzień",
@@ -488,28 +512,52 @@ def t(key: str) -> str:
 
 @st.cache_resource(show_spinner=False, ttl=DB_CACHE_TTL_SECONDS)
 def download_database() -> str:
-    """Скачивает hybridassistant.db с Google Диска во временное
-    хранилище контейнера. Результат кэшируется, чтобы не скачивать
-    файл заново на каждый ререндер страницы — только на холодном
-    старте, по истечении TTL или по кнопке "Обновить базу данных"."""
-    output_path = LOCAL_DB_CACHE_PATH
-    if os.path.exists(output_path):
-        try:
-            os.remove(output_path)
-        except OSError:
-            pass
+    """Скачивает содержимое папки на Google Диске во временное
+    хранилище контейнера и находит внутри неё файл базы данных (.db).
+    Результат кэшируется, чтобы не скачивать файлы заново на каждый
+    ререндер страницы — только на холодном старте, по истечении TTL
+    или по кнопке "Обновить базу данных".
 
-    gdown.download(id=GDRIVE_FILE_ID, output=output_path, quiet=True)
+    Папка (а не конкретный файл) используется потому, что при
+    повторной загрузке нового экспорта в тот же файл на Google Диске
+    его внутренний ID иногда меняется — скачивание по ID файла тогда
+    продолжает получать старую версию. Скачивание всей папки и выбор
+    самого подходящего .db файла внутри неё устойчиво к этому."""
+    folder_path = LOCAL_DB_FOLDER_PATH
+    if os.path.exists(folder_path):
+        shutil.rmtree(folder_path, ignore_errors=True)
+    os.makedirs(folder_path, exist_ok=True)
 
-    if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+    gdown.download_folder(id=GDRIVE_FOLDER_ID, output=folder_path, quiet=True, use_cookies=False)
+
+    db_candidates = []
+    for root, _dirs, files in os.walk(folder_path):
+        for fname in files:
+            if fname.lower().endswith(".db"):
+                db_candidates.append(os.path.join(root, fname))
+
+    if not db_candidates:
         raise RuntimeError(
-            "Пустой или отсутствующий файл после скачивания — проверьте доступ по ссылке."
+            "В папке на Google Диске не найден файл базы данных (.db). "
+            "Проверьте, что доступ к папке открыт по ссылке и файл действительно там лежит."
         )
+
+    # Если в папке несколько .db-файлов: сначала предпочитаем файл с
+    # обычным именем hybridassistant*.db, а среди подходящих кандидатов
+    # берём самый крупный по размеру — на практике база растёт со
+    # временем, поэтому самый большой файл почти всегда самый полный/свежий
+    # экспорт. Чтобы не гадать, лучше держать в папке только один .db файл.
+    named = [c for c in db_candidates if os.path.basename(c).lower().startswith("hybridassistant")]
+    pool = named if named else db_candidates
+    output_path = max(pool, key=os.path.getsize)
+
+    if os.path.getsize(output_path) == 0:
+        raise RuntimeError("Найденный файл базы данных пуст.")
     with open(output_path, "rb") as f:
         header = f.read(16)
     if not header.startswith(b"SQLite format 3"):
         raise RuntimeError(
-            "Скачанный файл не является базой SQLite — вероятно, доступ по ссылке не открыт."
+            "Найденный файл не является базой SQLite — проверьте содержимое папки на Google Диске."
         )
     return output_path
 
@@ -626,7 +674,7 @@ def load_fastlog_full(db_path: str, file_version: float) -> pd.DataFrame:
     if df.empty:
         return df
 
-    df["datetime"] = pd.to_datetime(df["TIMESTAMP"], unit="ms", errors="coerce")
+    df["datetime"] = _ms_to_local_datetime(df["TIMESTAMP"])
     numeric_cols = [c for c in df.columns if c not in ("TIMESTAMP", "datetime")]
     for c in numeric_cols:
         df[c] = pd.to_numeric(df[c], errors="coerce")
@@ -665,7 +713,7 @@ def load_trips_full(db_path: str, file_version: float) -> pd.DataFrame:
     if trips.empty:
         return pd.DataFrame()
 
-    trips["date"] = pd.to_datetime(trips["TSFIN"], unit="ms", errors="coerce")
+    trips["date"] = _ms_to_local_datetime(trips["TSFIN"])
     trips["distance"] = pd.to_numeric(trips["NKMS"], errors="coerce")
     trips["duration_min"] = pd.to_numeric(trips["NBSEC"], errors="coerce") / 60.0
 
@@ -802,7 +850,7 @@ def load_cell_delta_series(db_path: str, file_version: float) -> pd.DataFrame:
         return pd.DataFrame()
 
     combined = pd.concat(frames, ignore_index=True).sort_values("TIMESTAMP")
-    combined["timestamp"] = pd.to_datetime(combined["TIMESTAMP"], unit="ms", errors="coerce")
+    combined["timestamp"] = _ms_to_local_datetime(combined["TIMESTAMP"])
     return combined.reset_index(drop=True)
 
 
@@ -816,7 +864,7 @@ def load_battlog_probes(db_path: str, file_version: float) -> pd.DataFrame:
         df = pd.read_sql_query("SELECT * FROM BATTLOG ORDER BY TIMESTAMP", conn)
     if df.empty:
         return df
-    df["datetime"] = pd.to_datetime(df["TIMESTAMP"], unit="ms", errors="coerce")
+    df["datetime"] = _ms_to_local_datetime(df["TIMESTAMP"])
     probe_cols = [c for c in df.columns if c.startswith("TB")]
     for c in probe_cols:
         df[c] = pd.to_numeric(df[c], errors="coerce")
@@ -1242,29 +1290,106 @@ def render_sidebar():
         st.rerun()
 
 
-def _build_route_map_figure(trip_log: pd.DataFrame) -> go.Figure:
-    """Строит карту маршрута, окрашивая сегменты в синий (EV) и чёрный
-    (ДВС работает), в стиле My Toyota."""
+_MAP_PARAM_COLORS = {
+    "mode": {"EV": "#FFC800", "ICE": "#E30000"},
+    "braking": {"friction": "#E30000", "regen": "#2CA02C", "none": "#9AA0A6"},
+    "speed": {"low": "#2CA02C", "medium": "#FF8C00", "high": "#E30000"},
+    "soc": {"low": "#E30000", "medium": "#FF8C00", "high": "#2CA02C"},
+}
+
+_MAP_LEGEND_ITEMS = {
+    "mode": [
+        ("EV", {"ru": "EV (ДВС выключен)", "pl": "EV (silnik wyłączony)"}),
+        ("ICE", {"ru": "ДВС работает", "pl": "Silnik pracuje"}),
+    ],
+    "braking": [
+        ("friction", {"ru": "Механическое торможение", "pl": "Hamowanie mechaniczne"}),
+        ("regen", {"ru": "Рекуперация", "pl": "Rekuperacja"}),
+        ("none", {"ru": "Без торможения", "pl": "Bez hamowania"}),
+    ],
+    "speed": [
+        ("low", {"ru": "До 30 км/ч", "pl": "Do 30 km/h"}),
+        ("medium", {"ru": "30–60 км/ч", "pl": "30–60 km/h"}),
+        ("high", {"ru": "Свыше 60 км/ч", "pl": "Powyżej 60 km/h"}),
+    ],
+    "soc": [
+        ("low", {"ru": "Заряд < 30%", "pl": "Ładunek < 30%"}),
+        ("medium", {"ru": "Заряд 30–70%", "pl": "Ładunek 30–70%"}),
+        ("high", {"ru": "Заряд > 70%", "pl": "Ładunek > 70%"}),
+    ],
+}
+
+
+def _drop_frozen_gps_samples(df: pd.DataFrame) -> pd.DataFrame:
+    """Убирает точки, где GPS-координата не изменилась относительно
+    предыдущей, а машина по OBD (SPEED_OBD) в этот момент реально
+    двигалась — такие точки не отражают реальное положение машины и
+    рисуют на карте оторванные "хвосты" вне дороги."""
+    if df.empty or "SPEED_OBD" not in df.columns:
+        return df
+    df = df.sort_values("TIMESTAMP")
+    same_as_prev = (df["GPS_LAT"].diff() == 0) & (df["GPS_LON"].diff() == 0)
+    moving = df["SPEED_OBD"].fillna(0) > 5
+    return df.loc[~(same_as_prev & moving)]
+
+
+def _categorize_for_map(df: pd.DataFrame, parameter: str) -> pd.Series:
+    if parameter == "mode":
+        return df["mode"]
+    if parameter == "braking":
+        friction = df["BRK_MCYL_TRQ"].fillna(0) != 0
+        regen = df["BRK_REG_TRQ"].fillna(0) != 0
+        cat = pd.Series("none", index=df.index)
+        cat[regen] = "regen"
+        cat[friction] = "friction"
+        return cat
+    if parameter == "speed":
+        speed = pd.to_numeric(df.get("SPEED_OBD"), errors="coerce").fillna(0)
+        return pd.cut(speed, bins=[-1, 30, 60, 1e9], labels=["low", "medium", "high"]).astype(str)
+    if parameter == "soc":
+        soc = pd.to_numeric(df.get("SOC"), errors="coerce").fillna(50)
+        return pd.cut(soc, bins=[-1, 30, 70, 101], labels=["low", "medium", "high"]).astype(str)
+    return pd.Series("none", index=df.index)
+
+
+def _render_map_legend(parameter: str) -> None:
+    lang = st.session_state.get("lang", "pl")
+    color_map = _MAP_PARAM_COLORS.get(parameter, {})
+    items = _MAP_LEGEND_ITEMS.get(parameter, [])
+    swatches = "".join(
+        f'<span style="display:inline-flex;align-items:center;margin-right:18px;">'
+        f'<span style="width:14px;height:14px;background:{color_map.get(key, "#888")};'
+        f'display:inline-block;border-radius:3px;margin-right:6px;"></span>{label[lang]}</span>'
+        for key, label in items
+    )
+    st.markdown(f'<div style="margin-top:6px;">{swatches}</div>', unsafe_allow_html=True)
+
+
+def _build_route_map_figure(trip_log: pd.DataFrame, parameter: str = "mode") -> go.Figure:
+    """Строит карту маршрута, окрашивая сегменты по выбранному
+    параметру (режим EV/ДВС, торможение, скорость или заряд батареи)."""
     fig = go.Figure()
     trip_log = _filter_gps_outliers(trip_log)
+    trip_log = _drop_frozen_gps_samples(trip_log)
     points = trip_log.dropna(subset=["GPS_LAT", "GPS_LON"]).reset_index(drop=True)
 
     if points.empty:
         return fig
 
-    color_map = {"EV": "#0066FF", "ICE": "#000000"}
+    points["_category"] = _categorize_for_map(points, parameter)
+    color_map = _MAP_PARAM_COLORS.get(parameter, _MAP_PARAM_COLORS["mode"])
+
     seg_start = 0
     for i in range(1, len(points) + 1):
-        if i == len(points) or points.loc[i, "mode"] != points.loc[seg_start, "mode"]:
+        if i == len(points) or points.loc[i, "_category"] != points.loc[seg_start, "_category"]:
             seg = points.loc[seg_start : i - 1 + (1 if i < len(points) else 0)]
-            mode = points.loc[seg_start, "mode"]
+            category = points.loc[seg_start, "_category"]
             fig.add_trace(
                 go.Scattermap(
                     lat=seg["GPS_LAT"],
                     lon=seg["GPS_LON"],
                     mode="lines",
-                    line=dict(width=4, color=color_map.get(mode, "#888888")),
-                    name=t("legend_ev") if mode == "EV" else t("legend_ice"),
+                    line=dict(width=5, color=color_map.get(category, "#888888")),
                     showlegend=False,
                     hoverinfo="skip",
                 )
@@ -1274,7 +1399,7 @@ def _build_route_map_figure(trip_log: pd.DataFrame) -> go.Figure:
     center_lat = points["GPS_LAT"].mean()
     center_lon = points["GPS_LON"].mean()
     fig.update_layout(
-        map=dict(style="open-street-map", center=dict(lat=center_lat, lon=center_lon), zoom=12),
+        map=dict(style="open-street-map", center=dict(lat=center_lat, lon=center_lon), zoom=13),
         margin=dict(l=0, r=0, t=0, b=0),
         height=450,
         showlegend=False,
@@ -1389,7 +1514,7 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version):
         st.subheader(t("map_section_title"))
         trip_options = {
             f"{row['date'].strftime('%Y-%m-%d %H:%M')} — {row['distance']:.1f} км": idx
-            for idx, row in trips_df.iterrows()
+            for idx, row in trips_df.sort_values("date", ascending=False).iterrows()
         }
         if trip_options and not fastlog_df.empty:
             selected_label = st.selectbox(t("map_select_trip"), list(trip_options.keys()))
@@ -1400,7 +1525,20 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version):
             if trip_log[["GPS_LAT", "GPS_LON"]].dropna().empty:
                 st.info(t("no_gps_data"))
             else:
-                st.plotly_chart(_build_route_map_figure(trip_log), use_container_width=True)
+                param_options = {
+                    "mode": t("map_param_mode"),
+                    "braking": t("map_param_braking"),
+                    "speed": t("map_param_speed"),
+                    "soc": t("map_param_soc"),
+                }
+                selected_param = st.selectbox(
+                    t("map_param_label"),
+                    options=list(param_options.keys()),
+                    format_func=lambda k: param_options[k],
+                    key="map_param_select",
+                )
+                st.plotly_chart(_build_route_map_figure(trip_log, selected_param), use_container_width=True)
+                _render_map_legend(selected_param)
                 if _gps_frozen_ratio(trip_log) > 0.3:
                     st.warning(t("gps_signal_lost_warning"))
 
@@ -1549,7 +1687,7 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
 
     trip_options = {
         f"{row['date'].strftime('%Y-%m-%d %H:%M')} — {row['distance']:.1f} км": idx
-        for idx, row in trips_df.iterrows()
+        for idx, row in trips_df.sort_values("date", ascending=False).iterrows()
     }
     selected_label = st.selectbox(t("logs_select_trip"), list(trip_options.keys()), key="tab2_trip_select")
     sel_idx = trip_options[selected_label]
