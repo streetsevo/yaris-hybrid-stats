@@ -206,6 +206,7 @@ TR = {
         "no_log_data": "Нет данных телеметрии (логов) для отображения.",
         "no_cell_data": "Нет данных о напряжении элементов батареи. Включите HighSpeedLogging в настройках Hybrid Assistant или проведите процедуру HV Check.",
         "no_gps_data": "Нет GPS-данных для этой поездки/периода.",
+        "gps_signal_lost_warning": "⚠️ GPS-модуль частично потерял сигнал во время этой поездки (по данным OBD машина ехала, но координаты не обновлялись) — на карте показан только участок с надёжным сигналом. Это ограничение исходных данных, а не ошибка приложения.",
         "not_enough_data": "Недостаточно данных для расчёта.",
         # --- Вкладки ---
         "tab1": "📊 Аналитика и Диагностика",
@@ -350,6 +351,7 @@ TR = {
         "no_log_data": "Brak danych telemetrycznych (logów) do wyświetlenia.",
         "no_cell_data": "Brak danych o napięciu ogniw baterii. Włącz HighSpeedLogging w ustawieniach Hybrid Assistant lub wykonaj procedurę HV Check.",
         "no_gps_data": "Brak danych GPS dla tego przejazdu/okresu.",
+        "gps_signal_lost_warning": "⚠️ Moduł GPS częściowo utracił sygnał podczas tego przejazdu (wg danych OBD samochód jechał, ale współrzędne się nie aktualizowały) — na mapie pokazano tylko odcinek z wiarygodnym sygnałem. To ograniczenie danych źródłowych, a nie błąd aplikacji.",
         "not_enough_data": "Za mało danych do obliczeń.",
         "tab1": "📊 Analityka i Diagnostyka",
         "tab2": "📈 Szczegółowe logi",
@@ -563,6 +565,25 @@ def _normalize_gps_coordinate(series: pd.Series, expected_min: float, expected_m
     if best_fraction <= 0:
         return numeric
     return numeric / best_divisor
+
+
+def _gps_frozen_ratio(df: pd.DataFrame) -> float:
+    """Доля моментов, когда по данным OBD машина реально ехала
+    (SPEED_OBD > 5 км/ч), но GPS-координата не изменилась относительно
+    предыдущей точки. Частая ситуация: GPS-модуль ещё не поймал сигнал
+    в первые секунды после старта, или сигнал теряется у эстакад/в
+    туннелях. Высокое значение означает, что трек на карте показывает
+    лишь часть реального маршрута — это ограничение исходных данных, а
+    не ошибка отрисовки."""
+    if df.empty or len(df) < 2 or "SPEED_OBD" not in df.columns:
+        return 0.0
+    df = df.sort_values("TIMESTAMP")
+    same_as_prev = (df["GPS_LAT"].diff() == 0) & (df["GPS_LON"].diff() == 0)
+    moving = df["SPEED_OBD"].fillna(0) > 5
+    total_moving = int(moving.sum())
+    if total_moving == 0:
+        return 0.0
+    return float((same_as_prev & moving).sum() / total_moving)
 
 
 def _filter_gps_outliers(df: pd.DataFrame) -> pd.DataFrame:
@@ -1380,6 +1401,8 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version):
                 st.info(t("no_gps_data"))
             else:
                 st.plotly_chart(_build_route_map_figure(trip_log), use_container_width=True)
+                if _gps_frozen_ratio(trip_log) > 0.3:
+                    st.warning(t("gps_signal_lost_warning"))
 
             ev_pct = sel_row.get("ev_pct")
             ice_pct = 100 - ev_pct if pd.notna(ev_pct) else None
