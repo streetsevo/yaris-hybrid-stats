@@ -528,23 +528,67 @@ def _table_exists(db_path: str, table_name: str, file_version: float) -> bool:
         return cur.fetchone() is not None
 
 
-def _normalize_gps_coordinate(series: pd.Series) -> pd.Series:
-    """Некоторые версии/экспорты Hybrid Assistant хранят GPS-координаты
-    как целые числа, умноженные на 10 000 000 (например, 518445630
-    вместо 51.8445630) — это стандартный формат Android "E7". Другие
-    экспорты уже хранят готовые градусы (51.844563). Чтобы карта
-    работала независимо от конкретного экспорта, определяем формат по
-    типичной величине значений: настоящие широта/долгота по модулю не
-    превышают 180, а "сырой" формат ×10^7 даёт значения порядка
-    десятков-сотен миллионов — их делим на 10 000 000.0. Если координаты
-    уже в разумном диапазоне, оставляем как есть."""
+# Машина эксплуатируется в Польше — используем это как опорный диапазон,
+# чтобы автоматически подобрать масштаб координат, а не гадать по одному
+# порогу. Разные экспорты Hybrid Assistant хранят GPS по-разному: где-то
+# уже готовые градусы (51.844563), где-то целые числа, умноженные на
+# 10^6 или 10^7 (форматы Android "E6"/"E7"). Диапазон ниже — с запасом,
+# чтобы не отсекать легитимные поездки, например, к границе с Германией
+# или Украиной.
+_POLAND_LAT_RANGE = (47.0, 56.0)
+_POLAND_LON_RANGE = (13.0, 26.0)
+_GPS_SCALE_CANDIDATES = (1.0, 1_000.0, 100_000.0, 1_000_000.0, 10_000_000.0)
+
+
+def _normalize_gps_coordinate(series: pd.Series, expected_min: float, expected_max: float) -> pd.Series:
+    """Подбирает делитель из кандидатов (1, 10^3, 10^5, 10^6, 10^7),
+    проверяя, какой из них даёт наибольшую долю значений внутри
+    ожидаемого диапазона (примерная территория Польши). Если ни один
+    вариант не даёт разумного результата, данные не трогаем — лучше
+    оставить как есть, чем сломать ещё сильнее."""
     numeric = pd.to_numeric(series, errors="coerce")
     sample = numeric.dropna()
     if sample.empty:
         return numeric
-    if sample.abs().median() > 1000:  # похоже на "сырой" формат ×10^7
-        return numeric / 10_000_000.0
-    return numeric
+
+    best_divisor = 1.0
+    best_fraction = -1.0
+    for divisor in _GPS_SCALE_CANDIDATES:
+        scaled = sample / divisor
+        fraction_in_range = ((scaled >= expected_min) & (scaled <= expected_max)).mean()
+        if fraction_in_range > best_fraction:
+            best_fraction = fraction_in_range
+            best_divisor = divisor
+
+    if best_fraction <= 0:
+        return numeric
+    return numeric / best_divisor
+
+
+def _filter_gps_outliers(df: pd.DataFrame) -> pd.DataFrame:
+    """Отбрасывает единичные "сбойные" GPS-точки — типичная ситуация,
+    когда модуль ещё не поймал сигнал в начале маршрута и на секунду-две
+    отдаёт координаты за тысячи километров от реального положения.
+    Порог считается адаптивно через медианное абсолютное отклонение
+    (MAD), а не фиксированным числом градусов — иначе короткая поездка
+    по городу и длинный загородный перегон требовали бы разных порогов.
+    Минимальный порог 0.5° (~50 км) защищает от чрезмерной фильтрации
+    на очень компактных поездках, где MAD близок к нулю."""
+    if df.empty or "GPS_LAT" not in df.columns or "GPS_LON" not in df.columns:
+        return df
+    valid = df.dropna(subset=["GPS_LAT", "GPS_LON"])
+    if len(valid) < 3:
+        return df
+    median_lat = valid["GPS_LAT"].median()
+    median_lon = valid["GPS_LON"].median()
+    mad_lat = (valid["GPS_LAT"] - median_lat).abs().median()
+    mad_lon = (valid["GPS_LON"] - median_lon).abs().median()
+    lat_threshold = max(mad_lat * 20, 0.5)
+    lon_threshold = max(mad_lon * 20, 0.5)
+    mask = (
+        (df["GPS_LAT"] - median_lat).abs() <= lat_threshold
+    ) & ((df["GPS_LON"] - median_lon).abs() <= lon_threshold)
+    return df[mask | df["GPS_LAT"].isna() | df["GPS_LON"].isna()]
 
 
 @st.cache_data(show_spinner=False)
@@ -566,9 +610,10 @@ def load_fastlog_full(db_path: str, file_version: float) -> pd.DataFrame:
     for c in numeric_cols:
         df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    for gps_col in ("GPS_LAT", "GPS_LON"):
-        if gps_col in df.columns:
-            df[gps_col] = _normalize_gps_coordinate(df[gps_col])
+    if "GPS_LAT" in df.columns:
+        df["GPS_LAT"] = _normalize_gps_coordinate(df["GPS_LAT"], *_POLAND_LAT_RANGE)
+    if "GPS_LON" in df.columns:
+        df["GPS_LON"] = _normalize_gps_coordinate(df["GPS_LON"], *_POLAND_LON_RANGE)
 
     df["mode"] = np.where(df["ICE_RPM"].fillna(0) > 0, "ICE", "EV")
     df["friction_braking_active"] = df["BRK_MCYL_TRQ"].fillna(0) != 0
@@ -1180,6 +1225,7 @@ def _build_route_map_figure(trip_log: pd.DataFrame) -> go.Figure:
     """Строит карту маршрута, окрашивая сегменты в синий (EV) и чёрный
     (ДВС работает), в стиле My Toyota."""
     fig = go.Figure()
+    trip_log = _filter_gps_outliers(trip_log)
     points = trip_log.dropna(subset=["GPS_LAT", "GPS_LON"]).reset_index(drop=True)
 
     if points.empty:
@@ -1364,6 +1410,7 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version):
                 "Y": latest_ts - timedelta(days=365),
             }[freq]
             period_df = fastlog_df[fastlog_df["datetime"] >= period_start]
+            period_df = _filter_gps_outliers(period_df)
             period_trips = trips_df[trips_df["date"] >= period_start]
             period_avg_consumption = period_trips["consumption"].mean()
 
