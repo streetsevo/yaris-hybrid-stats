@@ -465,6 +465,34 @@ TR = {
         "ha_reports_upload_label": "Загрузите HTML-отчёты Hybrid Assistant (можно сразу несколько)",
         "ha_reports_limit_caption": "За один раз можно загрузить до 100 файлов, каждый до 200 МБ — это ограничения самого Streamlit по умолчанию.",
         "ha_reports_loaded_count": "Распознано отчётов: {n}",
+        "ha_reports_drive_found": "✅ Автоматически загружено с Google Диска: {n} отчёт(ов). Отдельно загружать их не нужно.",
+        "ha_reports_drive_none": "ℹ️ В папке на Google Диске HTML-отчётов не найдено. Положите их туда рядом с базой данных — тогда они будут подхватываться автоматически при каждом обновлении. Либо загрузите вручную ниже.",
+        "ha_reports_drive_list": "Показать список отчётов с Google Диска",
+        "ha_reports_upload_help": "Отчёт создаётся в приложении Hybrid Assistant: откройте поездку и выберите экспорт в HTML.",
+        "ha_reports_none_at_all": "Отчётов пока нет — ни на Google Диске, ни загруженных вручную.",
+        "ha_reports_upload_success": "✅ Успешно распознано отчётов: {n}",
+        "ha_reports_upload_failed": "❌ Не удалось распознать «{name}»: {reason}",
+        "ha_reports_fail_no_time": "в файле не найдено время поездки — похоже, это не отчёт Hybrid Assistant",
+        "ha_reports_details": "Показать, какие отчёты распознаны",
+        "ha_reports_col_file": "Файл",
+        "ha_reports_col_source": "Источник",
+        "ha_reports_source_drive": "Google Диск",
+        "ha_reports_source_manual": "Загружен вручную",
+        "ha_maps_title": "🗺️ Карты из отчёта Hybrid Assistant",
+        "ha_trip_extras_title": "📄 Данные из HTML-отчёта для этой поездки",
+        "ha_maps_source_note": "📄 Карта построена из HTML-отчёта Hybrid Assistant (его собственный расчёт категорий).",
+        "ha_trip_no_report": "Для этой поездки не загружен HTML-отчёт. Загрузите отчёты на вкладке «Сравнение и тренды» — приложение само сопоставит их с поездками по времени и покажет здесь фирменные показатели и карты Hybrid Assistant.",
+        "ha_trip_report_found": "Найден отчёт для этой поездки: {name}",
+        "ha_maps_explainer": "Эти карты рисует сам Hybrid Assistant по своим внутренним алгоритмам. Карты «Мгновенный расход», «BSFC» и «Оценка наката» невозможно построить из базы данных — там нет ни готовых категорий, ни открытой формулы их расчёта.",
+        "ha_maps_select_report": "Отчёт",
+        "ha_maps_select_map": "Карта",
+        "ha_maps_no_maps": "В этом отчёте не найдено карт (возможно, у поездки не было GPS-данных).",
+        "ha_maps_gps_warning": "⚠️ В этом отчёте GPS-точки укладываются в пятно менее 100 м, хотя поездка была длиннее — значит, GPS-модуль терял сигнал во время записи. Цветовые категории при этом достоверны, а вот географию такой карты читать бессмысленно.",
+        "device_label": "Вид интерфейса",
+        "device_auto": "Автоматически",
+        "device_mobile": "Телефон",
+        "device_desktop": "Компьютер",
+        "device_current": "Определено: {device}",
         "ha_reports_parse_error": "⚠️ Не удалось распознать ни один из загруженных файлов как отчёт Hybrid Assistant.",
         "ha_reports_hvcheck_note": "ℹ️ Если в отчёте есть результаты теста HV Check (поблочные напряжения элементов), сообщи мне — пришли пример такого отчёта, и я добавлю автоматическое извлечение этих данных для расчёта SOH, когда в самой базе HV Check пуст.",
         "ha_trend_soc_title": "🔋 Откуда берётся заряд батареи",
@@ -513,6 +541,13 @@ TR = {
         "save_success": "✅ Запись успешно сохранена!",
         "save_fill_all": "⚠️ Заполните все поля перед сохранением.",
         "invoice_upload_label": "📷 Сфотографируйте фактуру/чек — данные подставятся автоматически",
+        "invoice_section_title": "📷 Автоматическое распознавание фактуры",
+        "invoice_how_it_works": "Сфотографируйте чек или фактуру — приложение распознает дату, пробег и список работ и подставит их в форму ниже. Останется только проверить и сохранить.",
+        "invoice_upload_help": "Подойдёт обычное фото с телефона. Важно, чтобы дата, пробег и перечень работ были читаемы.",
+        "invoice_waiting": "Обрабатываю фото…",
+        "invoice_partial": "⚠️ Распознано частично — не удалось определить: {fields}. Заполните эти поля вручную в форме ниже.",
+        "invoice_check_before_save": "Проверьте данные в форме ниже перед сохранением — распознавание может ошибаться.",
+        "invoice_error_hint": "Попробуйте переснять при лучшем освещении, без бликов и под прямым углом.",
         "invoice_processing": "Распознаём фактуру через Gemini…",
         "invoice_success": "✅ Данные распознаны и подставлены в форму ниже.",
         "invoice_error": "⚠️ Не удалось распознать фактуру: {error}",
@@ -741,6 +776,34 @@ TR = {
         "ha_reports_upload_label": "Wgraj raporty HTML Hybrid Assistant (można od razu kilka)",
         "ha_reports_limit_caption": "Jednorazowo można wgrać do 100 plików, każdy do 200 MB — to domyślne ograniczenia samego Streamlit.",
         "ha_reports_loaded_count": "Rozpoznanych raportów: {n}",
+        "ha_reports_drive_found": "✅ Automatycznie pobrano z Google Drive: {n} raport(ów). Nie trzeba ich wgrywać osobno.",
+        "ha_reports_drive_none": "ℹ️ W folderze na Google Drive nie znaleziono raportów HTML. Umieść je tam obok bazy danych — wtedy będą pobierane automatycznie przy każdym odświeżeniu. Albo wgraj ręcznie poniżej.",
+        "ha_reports_drive_list": "Pokaż listę raportów z Google Drive",
+        "ha_reports_upload_help": "Raport tworzy się w aplikacji Hybrid Assistant: otwórz przejazd i wybierz eksport do HTML.",
+        "ha_reports_none_at_all": "Nie ma jeszcze żadnych raportów — ani na Google Drive, ani wgranych ręcznie.",
+        "ha_reports_upload_success": "✅ Pomyślnie rozpoznano raportów: {n}",
+        "ha_reports_upload_failed": "❌ Nie udało się rozpoznać „{name}”: {reason}",
+        "ha_reports_fail_no_time": "w pliku nie znaleziono czasu przejazdu — to chyba nie jest raport Hybrid Assistant",
+        "ha_reports_details": "Pokaż, które raporty rozpoznano",
+        "ha_reports_col_file": "Plik",
+        "ha_reports_col_source": "Źródło",
+        "ha_reports_source_drive": "Google Drive",
+        "ha_reports_source_manual": "Wgrany ręcznie",
+        "ha_maps_title": "🗺️ Mapy z raportu Hybrid Assistant",
+        "ha_trip_extras_title": "📄 Dane z raportu HTML dla tego przejazdu",
+        "ha_maps_source_note": "📄 Mapa zbudowana z raportu HTML Hybrid Assistant (jego własne obliczenie kategorii).",
+        "ha_trip_no_report": "Dla tego przejazdu nie wgrano raportu HTML. Wgraj raporty w zakładce „Porównanie i trendy” — aplikacja sama dopasuje je do przejazdów po czasie i pokaże tutaj firmowe wskaźniki oraz mapy Hybrid Assistant.",
+        "ha_trip_report_found": "Znaleziono raport dla tego przejazdu: {name}",
+        "ha_maps_explainer": "Te mapy rysuje sam Hybrid Assistant według własnych algorytmów. Map „Chwilowe spalanie”, „BSFC” i „Ocena wybiegu” nie da się zbudować z bazy danych — nie ma tam ani gotowych kategorii, ani jawnego wzoru ich obliczania.",
+        "ha_maps_select_report": "Raport",
+        "ha_maps_select_map": "Mapa",
+        "ha_maps_no_maps": "W tym raporcie nie znaleziono map (przejazd mógł nie mieć danych GPS).",
+        "ha_maps_gps_warning": "⚠️ W tym raporcie punkty GPS mieszczą się w plamce poniżej 100 m, choć przejazd był dłuższy — moduł GPS tracił sygnał podczas zapisu. Kategorie kolorów są wiarygodne, ale geografii takiej mapy nie ma sensu czytać.",
+        "device_label": "Widok interfejsu",
+        "device_auto": "Automatycznie",
+        "device_mobile": "Telefon",
+        "device_desktop": "Komputer",
+        "device_current": "Wykryto: {device}",
         "ha_reports_parse_error": "⚠️ Nie udało się rozpoznać żadnego z wgranych plików jako raportu Hybrid Assistant.",
         "ha_reports_hvcheck_note": "ℹ️ Jeśli w raporcie są wyniki testu HV Check (napięcia poszczególnych ogniw), daj znać — wyślij przykład takiego raportu, a dodam automatyczne wyciąganie tych danych do obliczenia SOH, gdy HV Check w samej bazie jest pusty.",
         "ha_trend_soc_title": "🔋 Skąd bierze się naładowanie baterii",
@@ -788,6 +851,13 @@ TR = {
         "save_success": "✅ Wpis został zapisany!",
         "save_fill_all": "⚠️ Uzupełnij wszystkie pola przed zapisaniem.",
         "invoice_upload_label": "📷 Sfotografuj fakturę/paragon — dane zostaną podstawione automatycznie",
+        "invoice_section_title": "📷 Automatyczne rozpoznawanie faktury",
+        "invoice_how_it_works": "Zrób zdjęcie paragonu lub faktury — aplikacja rozpozna datę, przebieg i zakres prac oraz podstawi je do formularza poniżej. Wystarczy sprawdzić i zapisać.",
+        "invoice_upload_help": "Wystarczy zwykłe zdjęcie z telefonu. Ważne, aby data, przebieg i zakres prac były czytelne.",
+        "invoice_waiting": "Przetwarzam zdjęcie…",
+        "invoice_partial": "⚠️ Rozpoznano częściowo — nie udało się ustalić: {fields}. Uzupełnij te pola ręcznie w formularzu poniżej.",
+        "invoice_check_before_save": "Sprawdź dane w formularzu poniżej przed zapisaniem — rozpoznawanie może się mylić.",
+        "invoice_error_hint": "Spróbuj zrobić zdjęcie ponownie przy lepszym świetle, bez odblasków i pod kątem prostym.",
         "invoice_processing": "Rozpoznawanie faktury przez Gemini…",
         "invoice_success": "✅ Dane rozpoznane i podstawione do formularza poniżej.",
         "invoice_error": "⚠️ Nie udało się rozpoznać faktury: {error}",
@@ -801,6 +871,142 @@ def t(key: str) -> str:
     """Достаёт перевод для текущего языка."""
     lang = st.session_state.get("lang", "pl")
     return TR[lang].get(key, key)
+
+
+# ============================================================
+# ОПРЕДЕЛЕНИЕ УСТРОЙСТВА И АДАПТИВНАЯ ВЁРСТКА
+# ============================================================
+# Тип устройства определяется по заголовку User-Agent через
+# официальный API st.context.headers. Это серверная эвристика: она
+# надёжна для типичных телефонов и десктопов, но User-Agent можно
+# подделать, а планшеты/складные устройства попадают в серую зону.
+# Поэтому она влияет ТОЛЬКО на удобство (размеры графиков, число
+# колонок), но никогда — на сами данные и расчёты. Дополнительно в
+# боковой панели есть ручное переключение на случай неверного
+# определения.
+
+_MOBILE_UA_PATTERN = re.compile(
+    r"Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Windows Phone",
+    re.IGNORECASE,
+)
+_TABLET_UA_PATTERN = re.compile(r"iPad|Tablet|PlayBook|Silk", re.IGNORECASE)
+
+
+def _detect_device_from_headers() -> str:
+    """Возвращает 'mobile' или 'desktop' по User-Agent. При любой
+    ошибке/недоступности заголовков безопасно возвращает 'desktop'."""
+    try:
+        headers = st.context.headers or {}
+        user_agent = headers.get("User-Agent") or headers.get("user-agent") or ""
+    except Exception:
+        return "desktop"
+
+    if not user_agent:
+        return "desktop"
+    # Планшеты считаем десктопом: на них хватает места под широкую вёрстку.
+    if _TABLET_UA_PATTERN.search(user_agent):
+        return "desktop"
+    if _MOBILE_UA_PATTERN.search(user_agent):
+        return "mobile"
+    return "desktop"
+
+
+def get_device_type() -> str:
+    """Тип устройства для текущей сессии. Ручной выбор пользователя
+    (если он его сделал) имеет приоритет над автоопределением."""
+    override = st.session_state.get("device_override")
+    if override in ("mobile", "desktop"):
+        return override
+    if "device_type_detected" not in st.session_state:
+        st.session_state["device_type_detected"] = _detect_device_from_headers()
+    return st.session_state["device_type_detected"]
+
+
+def is_mobile() -> bool:
+    return get_device_type() == "mobile"
+
+
+def rsp_height(desktop_px: int) -> int:
+    """Высота графика: на телефоне ниже, чтобы влезало на экран без
+    длинной прокрутки, но не настолько, чтобы стало нечитаемо."""
+    return int(desktop_px * 0.72) if is_mobile() else desktop_px
+
+
+# Примечание: уменьшать ЧИСЛО колонок на телефоне нельзя — вызывающий код
+# распаковывает фиксированное количество (col1, col2, col3, col4 = ...),
+# и меньшее число сломало бы распаковку. Поэтому перенос колонок на узком
+# экране решается через CSS (flex-wrap ниже), а не в Python.
+
+
+def inject_responsive_css() -> None:
+    """Немного CSS для аккуратного вида, особенно на телефоне:
+    компактнее отступы, читаемые метрики, аккуратные вкладки и
+    горизонтальная прокрутка таблиц вместо обрезания."""
+    mobile = is_mobile()
+    metric_value_size = "1.35rem" if mobile else "1.75rem"
+    block_padding = "0.6rem" if mobile else "1.2rem"
+    st.markdown(
+        f"""
+        <style>
+        .block-container {{
+            padding-top: {block_padding};
+            padding-bottom: 2.5rem;
+            padding-left: {block_padding};
+            padding-right: {block_padding};
+        }}
+        [data-testid="stMetricValue"] {{
+            font-size: {metric_value_size};
+            line-height: 1.2;
+        }}
+        [data-testid="stMetricLabel"] {{
+            font-size: 0.8rem;
+            opacity: 0.85;
+        }}
+        [data-testid="stMetric"] {{
+            background: rgba(140, 160, 200, 0.07);
+            border: 1px solid rgba(140, 160, 200, 0.18);
+            border-radius: 10px;
+            padding: 0.55rem 0.7rem;
+        }}
+        .stTabs [data-baseweb="tab-list"] {{
+            gap: 0.15rem;
+            overflow-x: auto;
+        }}
+        .stTabs [data-baseweb="tab"] {{
+            padding: 0.35rem 0.7rem;
+            white-space: nowrap;
+        }}
+        [data-testid="stExpander"] {{
+            border-radius: 10px;
+        }}
+        [data-testid="stDataFrame"] {{
+            overflow-x: auto;
+        }}
+        /* На узком экране ряд из 4-5 метрик сжимается до нечитаемых
+           колонок в пару символов шириной. Разрешаем колонкам переноситься
+           и задаём минимальную ширину — получается аккуратная сетка
+           по две метрики в ряд вместо пяти сплющенных. */
+        @media (max-width: 640px) {{
+            [data-testid="stHorizontalBlock"] {{
+                flex-wrap: wrap !important;
+                gap: 0.4rem !important;
+            }}
+            [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {{
+                min-width: calc(50% - 0.4rem) !important;
+                flex: 1 1 calc(50% - 0.4rem) !important;
+            }}
+            .block-container {{
+                padding-left: 0.6rem;
+                padding-right: 0.6rem;
+            }}
+            [data-testid="stMetricValue"] {{
+                font-size: 1.35rem;
+            }}
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # ============================================================
@@ -1736,6 +1942,22 @@ def render_sidebar():
     st.session_state["lang"] = choice
 
     st.sidebar.divider()
+    device_options = {"auto": t("device_auto"), "mobile": t("device_mobile"), "desktop": t("device_desktop")}
+    current_choice = st.session_state.get("device_choice", "auto")
+    chosen = st.sidebar.selectbox(
+        t("device_label"),
+        options=list(device_options.keys()),
+        format_func=lambda k: device_options[k],
+        index=list(device_options.keys()).index(current_choice),
+        key="device_choice_select",
+    )
+    st.session_state["device_choice"] = chosen
+    st.session_state["device_override"] = None if chosen == "auto" else chosen
+    if chosen == "auto":
+        detected_label = t("device_mobile") if is_mobile() else t("device_desktop")
+        st.sidebar.caption(t("device_current").format(device=detected_label))
+
+    st.sidebar.divider()
     if st.sidebar.button(t("refresh_db_button"), width="stretch"):
         last_refresh = st.session_state.get("db_refresh_triggered_at", 0.0)
         if time.time() - last_refresh < DB_REFRESH_COOLDOWN_SECONDS:
@@ -1857,7 +2079,7 @@ def _build_route_map_figure(trip_log: pd.DataFrame, parameter: str = "mode") -> 
     fig.update_layout(
         map=dict(style="open-street-map", center=dict(lat=center_lat, lon=center_lon), zoom=13),
         margin=dict(l=0, r=0, t=0, b=0),
-        height=450,
+        height=rsp_height(450),
         showlegend=False,
     )
     return fig
@@ -2020,7 +2242,7 @@ def _render_fuel_log_section(fuel_df: pd.DataFrame) -> None:
             go.Scatter(x=sub["date"], y=sub[selected_metric], name=t(label_key), mode="lines+markers", line=dict(color=color))
         )
     if fig.data:
-        fig.update_layout(height=350, yaxis_title=metric_options[selected_metric], legend=dict(orientation="h"))
+        fig.update_layout(height=rsp_height(350), yaxis_title=metric_options[selected_metric], legend=dict(orientation="h"))
         st.plotly_chart(fig, width="stretch", key="tab1_fuel_trend_chart")
     else:
         st.info(t("not_enough_data"))
@@ -2071,16 +2293,35 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
                     "speed": t("map_param_speed"),
                     "soc": t("map_param_soc"),
                 }
+                # Если для этой поездки загружен HTML-отчёт, добавляем его
+                # карты прямо сюда — включая те, что из базы не построить
+                # (мгновенный расход, BSFC, оценка наката).
+                ha_match = find_ha_report_for_trip(sel_row)
+                ha_maps = {}
+                if ha_match is not None:
+                    ha_file_name, _ha_data = ha_match
+                    ha_file_by_name = {f.name: f for f in get_uploaded_ha_files()}
+                    ha_maps = parse_ha_html_maps(ha_file_by_name[ha_file_name].getvalue())
+                    lang_now = st.session_state.get("lang", "pl")
+                    for ha_name in ha_maps:
+                        label = HA_MAP_TITLES.get(ha_name, {}).get(lang_now, ha_name)
+                        param_options[f"ha::{ha_name}"] = f"📄 {label}"
+
                 selected_param = st.selectbox(
                     t("map_param_label"),
                     options=list(param_options.keys()),
                     format_func=lambda k: param_options[k],
                     key="map_param_select",
                 )
-                st.plotly_chart(_build_route_map_figure(trip_log, selected_param), width="stretch", key="tab1_route_map")
-                _render_map_legend(selected_param)
-                if _gps_frozen_ratio(trip_log) > 0.3:
-                    st.warning(t("gps_signal_lost_warning"))
+                if selected_param.startswith("ha::"):
+                    ha_name = selected_param[4:]
+                    render_ha_html_map(ha_name, ha_maps[ha_name], key_prefix="tab1")
+                    st.caption(t("ha_maps_source_note"))
+                else:
+                    st.plotly_chart(_build_route_map_figure(trip_log, selected_param), width="stretch", key="tab1_route_map")
+                    _render_map_legend(selected_param)
+                    if _gps_frozen_ratio(trip_log) > 0.3:
+                        st.warning(t("gps_signal_lost_warning"))
 
             ev_pct = sel_row.get("ev_pct")
             ice_pct = 100 - ev_pct if pd.notna(ev_pct) else None
@@ -2133,7 +2374,7 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
                         zoom=10,
                     ),
                     margin=dict(l=0, r=0, t=0, b=0),
-                    height=400,
+                    height=rsp_height(400),
                 )
                 st.plotly_chart(grid_fig, width="stretch", key="tab1_period_map")
                 if pd.notna(period_avg_consumption):
@@ -2762,6 +3003,9 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
     render_trip_report_sections(report, lang)
 
     # --- Карта поездки (тот же виджет, что и на вкладке "Аналитика") ---
+    with st.expander(t("ha_trip_extras_title")):
+        render_ha_trip_extras(sel_row)
+
     with st.expander(t("rep_maps_title")):
         if maps_are_unlocked():
             if trip_log[["GPS_LAT", "GPS_LON"]].dropna().empty:
@@ -2795,7 +3039,7 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
         fig1.update_layout(
             yaxis=dict(title=t("unit_kmh")),
             yaxis2=dict(title=t("unit_rpm"), overlaying="y", side="right"),
-            height=380,
+            height=rsp_height(380),
             legend=dict(orientation="h"),
         )
         st.plotly_chart(fig1, width="stretch", key="tab2_chart_speed_rpm")
@@ -2807,7 +3051,7 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
         fig2.update_layout(
             yaxis=dict(title="В"),
             yaxis2=dict(title="А", overlaying="y", side="right"),
-            height=380,
+            height=rsp_height(380),
             legend=dict(orientation="h"),
         )
         st.plotly_chart(fig2, width="stretch", key="tab2_chart_hv")
@@ -2827,7 +3071,7 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
                 st.caption(t("logs_no_battlog"))
         else:
             st.caption(t("logs_no_battlog"))
-        fig3.update_layout(yaxis=dict(title="°C"), height=380, legend=dict(orientation="h"))
+        fig3.update_layout(yaxis=dict(title="°C"), height=rsp_height(380), legend=dict(orientation="h"))
         st.plotly_chart(fig3, width="stretch", key="tab2_chart_temps")
 
         st.markdown(f"#### {t('logs_chart_mg')}")
@@ -2839,7 +3083,7 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
         fig4.update_layout(
             yaxis=dict(title=t("unit_nm")),
             yaxis2=dict(title=t("unit_rpm"), overlaying="y", side="right"),
-            height=380,
+            height=rsp_height(380),
             legend=dict(orientation="h"),
         )
         st.plotly_chart(fig4, width="stretch", key="tab2_chart_mg")
@@ -2883,13 +3127,13 @@ def render_tab3():
     if any(r is not None for r in resistances):
         st.markdown(f"#### {t('drprius_resistance_chart')}")
         fig_r = go.Figure(go.Bar(x=[f"#{b}" for b in block_nums], y=resistances, marker_color="#ff7f0e"))
-        fig_r.update_layout(height=350)
+        fig_r.update_layout(height=rsp_height(350))
         st.plotly_chart(fig_r, width="stretch", key="tab3_resistance_chart")
 
     if any(v is not None for v in voltages):
         st.markdown(f"#### {t('drprius_voltage_chart')}")
         fig_v = go.Figure(go.Bar(x=[f"#{b}" for b in block_nums], y=voltages, marker_color="#2ca02c"))
-        fig_v.update_layout(height=350)
+        fig_v.update_layout(height=rsp_height(350))
         st.plotly_chart(fig_v, width="stretch", key="tab3_voltage_chart")
 
     st.divider()
@@ -3050,6 +3294,285 @@ def parse_ha_html_report(file_bytes: bytes) -> dict:
                 pass
 
     return result
+
+
+# --- Карты из HTML-отчёта ---
+# Hybrid Assistant рисует в отчёте пять карт Leaflet, где каждая точка
+# маршрута — это L.circle([lat, lon], radius, {color: '...'}). Цвет
+# кодирует категорию, посчитанную самим Hybrid Assistant. Для карт
+# "Мгновенный расход", "Торможение", "BSFC" и "Оценка наката" это
+# ЕДИНСТВЕННЫЙ способ их получить: в hybridassistant.db нет ни готовых
+# категорий, ни (для Glide/BSFC) открытой формулы их расчёта.
+# Координаты те же, что в базе, так что качество GPS-трека одинаковое.
+
+_HA_MAP_CIRCLE_RE = re.compile(
+    r"L\.circle\(\[([-\d.]+),\s*([-\d.]+)\],\s*(\d+),\s*\{\s*color:\s*'(\w+)'"
+)
+_HA_MAP_ID_RE = re.compile(r"id='([^']*Map)'")
+
+# Подписи цветов для каждой карты, взятые из легенд самого отчёта.
+HA_MAP_LEGENDS = {
+    "EV Map": {
+        "gold": {"ru": "EV (ДВС выключен)", "pl": "EV (silnik wyłączony)"},
+        "red": {"ru": "ДВС работает", "pl": "Silnik pracuje"},
+    },
+    "Brake Map": {
+        "green": {"ru": "Рекуперация", "pl": "Rekuperacja"},
+        "red": {"ru": "Механическое торможение", "pl": "Hamowanie mechaniczne"},
+        "black": {"ru": "Без торможения", "pl": "Bez hamowania"},
+    },
+    "Instant Consumption Map": {
+        "green": {"ru": "Очень низкий расход", "pl": "Bardzo niskie spalanie"},
+        "gold": {"ru": "Низкий расход", "pl": "Niskie spalanie"},
+        "orange": {"ru": "Средний расход", "pl": "Średnie spalanie"},
+        "red": {"ru": "Высокий расход", "pl": "Wysokie spalanie"},
+        "gray": {"ru": "Без расхода (EV)", "pl": "Bez spalania (EV)"},
+    },
+    "BSFC Map": {
+        "green": {"ru": "Эффективно", "pl": "Efektywnie"},
+        "gold": {"ru": "Умеренно", "pl": "Umiarkowanie"},
+        "orange": {"ru": "Неэффективно", "pl": "Nieefektywnie"},
+        "red": {"ru": "Очень неэффективно", "pl": "Bardzo nieefektywnie"},
+        "gray": {"ru": "Нет данных", "pl": "Brak danych"},
+    },
+    "Glide Evaluation Map": {
+        "green": {"ru": "Хороший накат", "pl": "Dobry wybieg"},
+        "gold": {"ru": "Умеренный накат", "pl": "Umiarkowany wybieg"},
+        "red": {"ru": "Плохой накат", "pl": "Słaby wybieg"},
+        "gray": {"ru": "Нейтрально", "pl": "Neutralnie"},
+    },
+}
+
+HA_MAP_TITLES = {
+    "EV Map": {"ru": "Режим EV / ДВС", "pl": "Tryb EV / silnik"},
+    "Brake Map": {"ru": "Торможение", "pl": "Hamowanie"},
+    "Instant Consumption Map": {"ru": "Мгновенный расход", "pl": "Chwilowe spalanie"},
+    "BSFC Map": {"ru": "Эффективность ДВС (BSFC)", "pl": "Efektywność silnika (BSFC)"},
+    "Glide Evaluation Map": {"ru": "Оценка наката (Glide)", "pl": "Ocena wybiegu (Glide)"},
+}
+
+# Цвета Leaflet -> нормальные hex-цвета для Plotly.
+_HA_COLOR_HEX = {
+    "gold": "#FFC800",
+    "red": "#E30000",
+    "green": "#2CA02C",
+    "orange": "#FF8C00",
+    "gray": "#9AA0A6",
+    "black": "#111111",
+    "blue": "#1f77b4",
+}
+
+
+@st.cache_data(show_spinner=False)
+def parse_ha_html_maps(file_bytes: bytes) -> dict:
+    """Извлекает точки всех карт из HTML-отчёта Hybrid Assistant.
+    Возвращает {название_карты: DataFrame(lat, lon, radius, color)}."""
+    try:
+        text = file_bytes.decode("utf-8", errors="replace")
+    except Exception:
+        return {}
+
+    positions = [(m.group(1), m.start()) for m in _HA_MAP_ID_RE.finditer(text)]
+    maps = {}
+    for i, (name, pos) in enumerate(positions):
+        end = positions[i + 1][1] if i + 1 < len(positions) else len(text)
+        section = text[pos:end]
+        rows = [
+            {"lat": float(lat), "lon": float(lon), "radius": int(radius), "color": color}
+            for lat, lon, radius, color in _HA_MAP_CIRCLE_RE.findall(section)
+        ]
+        if rows:
+            df = pd.DataFrame(rows)
+            # Точки (0,0) — это "GPS не поймал сигнал", а не реальное место.
+            df = df[(df["lat"] != 0) | (df["lon"] != 0)]
+            if not df.empty:
+                maps[name] = df.reset_index(drop=True)
+    return maps
+
+
+def render_ha_html_map(map_name: str, points: pd.DataFrame, key_prefix: str = "tab4") -> None:
+    """Рисует одну карту из HTML-отчёта с легендой на выбранном языке."""
+    lang = st.session_state.get("lang", "pl")
+    fig = go.Figure()
+    legend = HA_MAP_LEGENDS.get(map_name, {})
+
+    for color, group in points.groupby("color"):
+        label = legend.get(color, {}).get(lang, color)
+        fig.add_trace(
+            go.Scattermap(
+                lat=group["lat"],
+                lon=group["lon"],
+                mode="markers",
+                marker=dict(size=6, color=_HA_COLOR_HEX.get(color, "#888888")),
+                name=label,
+                hoverinfo="skip",
+            )
+        )
+
+    fig.update_layout(
+        map=dict(
+            style="open-street-map",
+            center=dict(lat=points["lat"].mean(), lon=points["lon"].mean()),
+            zoom=11,
+        ),
+        margin=dict(l=0, r=0, t=0, b=0),
+        height=rsp_height(460),
+        legend=dict(orientation="h", yanchor="bottom", y=0.01, xanchor="left", x=0.01,
+                    bgcolor="rgba(255,255,255,0.75)"),
+    )
+    st.plotly_chart(fig, width="stretch", key=f"{key_prefix}_ha_map_{map_name.replace(' ', '_')}")
+
+
+class LocalReportFile:
+    """Обёртка над файлом с диска с тем же интерфейсом, что у файла из
+    st.file_uploader (.name / .getvalue()). Позволяет обрабатывать
+    отчёты из папки Google Диска и загруженные вручную одним кодом."""
+
+    def __init__(self, path: str):
+        self.path = path
+        self.name = os.path.basename(path)
+        self.source = "drive"
+
+    def getvalue(self) -> bytes:
+        with open(self.path, "rb") as f:
+            return f.read()
+
+
+def find_ha_report_htmls(folder_path: str) -> list:
+    """Ищет HTML-отчёты Hybrid Assistant в скачанной папке Google Диска."""
+    found = []
+    for root, _dirs, files in os.walk(folder_path):
+        for fname in files:
+            if fname.lower().endswith((".html", ".htm")):
+                found.append(os.path.join(root, fname))
+    return sorted(found)
+
+
+def get_ha_files_from_drive() -> list:
+    """HTML-отчёты, автоматически скачанные вместе с базой данных."""
+    try:
+        return [LocalReportFile(p) for p in find_ha_report_htmls(LOCAL_DB_FOLDER_PATH)]
+    except Exception:
+        return []
+
+
+def get_uploaded_ha_files() -> list:
+    """Все доступные HTML-отчёты: и автоматически скачанные из папки
+    Google Диска вместе с базой, и загруженные вручную. Отчёт относится
+    к конкретной поездке, поэтому этот список используется на всех
+    вкладках. При совпадении имён приоритет у загруженного вручную —
+    он новее и добавлен пользователем осознанно."""
+    manual = st.session_state.get("ha_reports_uploader") or []
+    manual = list(manual)
+    manual_names = {f.name for f in manual}
+    from_drive = [f for f in get_ha_files_from_drive() if f.name not in manual_names]
+    return manual + from_drive
+
+
+@st.cache_data(show_spinner=False)
+def _ha_report_time_index(file_names: tuple, file_contents: tuple) -> dict:
+    """Строит индекс {имя файла: (начало, конец)} по отчётам."""
+    index = {}
+    for name, content in zip(file_names, file_contents):
+        try:
+            data = parse_ha_html_report(content)
+        except Exception:
+            continue
+        if data.get("start") and data.get("finish"):
+            index[name] = (data["start"], data["finish"])
+    return index
+
+
+def find_ha_report_for_trip(trip_row) -> "tuple | None":
+    """Ищет HTML-отчёт, соответствующий выбранной поездке. Сопоставление
+    идёт по времени окончания: Hybrid Assistant пишет в отчёт локальное
+    время, и мы приводим TSFIN из базы к тому же локальному часовому
+    поясу, поэтому они должны совпадать с точностью до минут.
+    Возвращает (имя файла, разобранные данные) или None."""
+    files = get_uploaded_ha_files()
+    if not files:
+        return None
+
+    trip_finish = trip_row.get("date")
+    if pd.isna(trip_finish):
+        return None
+
+    names = tuple(f.name for f in files)
+    contents = tuple(f.getvalue() for f in files)
+    index = _ha_report_time_index(names, contents)
+
+    best_name, best_delta = None, None
+    for name, (_start, finish) in index.items():
+        delta = abs((pd.Timestamp(finish) - pd.Timestamp(trip_finish)).total_seconds())
+        if best_delta is None or delta < best_delta:
+            best_name, best_delta = name, delta
+
+    # 5 минут допуска: секунды могут разойтись из-за округления, но две
+    # разные поездки почти никогда не заканчиваются так близко.
+    if best_name is None or best_delta > 300:
+        return None
+
+    file_by_name = {f.name: f for f in files}
+    return best_name, parse_ha_html_report(file_by_name[best_name].getvalue())
+
+
+def render_ha_trip_extras(trip_row) -> None:
+    """Показывает данные из HTML-отчёта для КОНКРЕТНОЙ поездки:
+    фирменные показатели Hybrid Assistant, которых нет в базе, и его
+    собственные карты. Вызывается на вкладке детальных логов."""
+    match = find_ha_report_for_trip(trip_row)
+    if match is None:
+        st.info(t("ha_trip_no_report"))
+        return
+
+    file_name, data = match
+    st.success(t("ha_trip_report_found").format(name=file_name))
+
+    lang = st.session_state.get("lang", "pl")
+
+    # --- Показатели, которых нет в базе ---
+    soc_keys = ("soc_gained_brakings", "soc_gained_coasting", "soc_charged_by_ice")
+    if any(data.get(k) is not None for k in soc_keys):
+        st.markdown(f"**{t('ha_trend_soc_title')}**")
+        c1, c2, c3 = st.columns(3)
+        c1.metric(t("ha_soc_brakings"), f"{data.get('soc_gained_brakings', 0):.0f}%" if data.get("soc_gained_brakings") is not None else "—")
+        c2.metric(t("ha_soc_coasting"), f"{data.get('soc_gained_coasting', 0):.0f}%" if data.get("soc_gained_coasting") is not None else "—")
+        c3.metric(t("ha_soc_ice"), f"{data.get('soc_charged_by_ice', 0):.0f}%" if data.get("soc_charged_by_ice") is not None else "—")
+        st.caption(t("rep_soc_note"))
+
+    c1, c2, c3 = st.columns(3)
+    if data.get("glide_score") is not None:
+        c1.metric(t("ha_glide_score"), f"{data['glide_score']:.1f}")
+    if data.get("glide_type"):
+        c2.metric(t("rep_glide_title").replace("🛞 ", ""), str(data["glide_type"]))
+    if data.get("braking_efficiency") is not None:
+        c3.metric(t("ha_braking_efficiency"), f"{data['braking_efficiency']:.1f}%")
+
+    # --- Карты этой поездки из отчёта ---
+    st.markdown(f"**{t('ha_maps_title')}**")
+    if not maps_are_unlocked():
+        render_maps_locked_placeholder()
+        return
+
+    file_by_name = {f.name: f for f in get_uploaded_ha_files()}
+    maps = parse_ha_html_maps(file_by_name[file_name].getvalue())
+    if not maps:
+        st.info(t("ha_maps_no_maps"))
+        return
+
+    map_labels = {name: HA_MAP_TITLES.get(name, {}).get(lang, name) for name in maps}
+    chosen_map = st.selectbox(
+        t("ha_maps_select_map"),
+        list(maps.keys()),
+        format_func=lambda n: map_labels[n],
+        key="tab2_ha_map_select",
+    )
+    points = maps[chosen_map]
+    render_ha_html_map(chosen_map, points, key_prefix="tab2")
+    lat_span_m = (points["lat"].max() - points["lat"].min()) * 111_000
+    lon_span_m = (points["lon"].max() - points["lon"].min()) * 111_000 * 0.62
+    if max(lat_span_m, lon_span_m) < 100:
+        st.warning(t("ha_maps_gps_warning"))
 
 
 def load_ha_reports(uploaded_files) -> pd.DataFrame:
@@ -3219,12 +3742,12 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
         st.markdown(f"#### {t('compare_trend_soh')}")
         soh_series = cell_df["cell_delta"].apply(calculate_soh)
         fig_soh = go.Figure(go.Scatter(x=cell_df["timestamp"], y=soh_series, mode="lines+markers"))
-        fig_soh.update_layout(height=300, yaxis_title="SOH %")
+        fig_soh.update_layout(height=rsp_height(300), yaxis_title="SOH %")
         st.plotly_chart(fig_soh, width="stretch", key="tab4_soh_trend")
 
         st.markdown(f"#### {t('compare_trend_delta')}")
         fig_delta = go.Figure(go.Scatter(x=cell_df["timestamp"], y=cell_df["cell_delta"], mode="lines+markers"))
-        fig_delta.update_layout(height=300, yaxis_title="Delta, В")
+        fig_delta.update_layout(height=rsp_height(300), yaxis_title="Delta, В")
         st.plotly_chart(fig_delta, width="stretch", key="tab4_delta_trend")
     else:
         st.info(t("no_cell_data"))
@@ -3244,7 +3767,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
             for yr in sorted(pivot["year"].unique()):
                 sub = pivot[pivot["year"] == yr]
                 fig_season.add_trace(go.Scatter(x=sub["month_num"], y=sub["battery_temp"], name=str(yr), mode="lines+markers"))
-            fig_season.update_layout(height=300, xaxis_title="Месяц", yaxis_title="°C ВВБ")
+            fig_season.update_layout(height=rsp_height(300), xaxis_title="Месяц", yaxis_title="°C ВВБ")
             st.plotly_chart(fig_season, width="stretch", key="tab4_seasonal_chart")
     else:
         st.info(t("not_enough_data"))
@@ -3260,7 +3783,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
             fig = go.Figure(
                 go.Scatter(x=lpg_df["date"], y=lpg_df["consumption_l100"], mode="lines+markers", name=t("fuel_type_lpg"))
             )
-            fig.update_layout(height=300, yaxis_title=t("unit_l100km"))
+            fig.update_layout(height=rsp_height(300), yaxis_title=t("unit_l100km"))
             st.plotly_chart(fig, width="stretch", key="tab4_fuel_lpg_trend")
             st.caption(t("fuel_real_badge_note"))
 
@@ -3291,7 +3814,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
                     sub = fuel_monthly[fuel_monthly["fuel_type"] == ftype]
                     if not sub.empty:
                         fig2.add_trace(go.Scatter(x=sub["month"], y=sub["consumption_l100"], name=f"{t(label_key)} {t('fuel_real_badge')}", mode="lines+markers"))
-                fig2.update_layout(height=320, yaxis_title=t("unit_l100km"), legend=dict(orientation="h"))
+                fig2.update_layout(height=rsp_height(320), yaxis_title=t("unit_l100km"), legend=dict(orientation="h"))
                 st.plotly_chart(fig2, width="stretch", key="tab4_fuel_crosscheck")
                 st.caption(t("fuel_crosscheck_note"))
 
@@ -3299,6 +3822,17 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
     st.divider()
     st.subheader(t("ha_reports_title"))
     st.caption(t("ha_reports_explainer"))
+
+    # Сначала показываем, что уже нашлось на Google Диске автоматически —
+    # чтобы было понятно, нужно ли вообще что-то загружать вручную.
+    drive_files = get_ha_files_from_drive()
+    if drive_files:
+        st.success(t("ha_reports_drive_found").format(n=len(drive_files)))
+        with st.expander(t("ha_reports_drive_list"), expanded=False):
+            for f in drive_files:
+                st.markdown(f"- `{f.name}`")
+    else:
+        st.info(t("ha_reports_drive_none"))
 
     if not _render_password_gate(
         "maintenance", "maintenance_password_hash", _FALLBACK_PASSWORD_HASH, "maintenance_unlocked",
@@ -3311,19 +3845,91 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
         type=["html", "htm"],
         accept_multiple_files=True,
         key="ha_reports_uploader",
+        help=t("ha_reports_upload_help"),
     )
     st.caption(t("ha_reports_limit_caption"))
 
-    ha_files = st.session_state.get("ha_reports_uploader")
+    ha_files = get_uploaded_ha_files()
     if not ha_files:
+        st.info(t("ha_reports_none_at_all"))
         return
 
-    reports_df = load_ha_reports(ha_files)
+    # Разбираем каждый файл по отдельности и честно показываем результат
+    # по каждому: что распозналось, что нет и почему.
+    ok_rows, failed = [], []
+    for uf in ha_files:
+        try:
+            data = parse_ha_html_report(uf.getvalue())
+        except Exception as e:
+            failed.append((uf.name, str(e)[:120]))
+            continue
+        if data.get("finish"):
+            ok_rows.append((uf, data))
+        else:
+            failed.append((uf.name, t("ha_reports_fail_no_time")))
+
+    if ok_rows:
+        st.success(t("ha_reports_upload_success").format(n=len(ok_rows)))
+        with st.expander(t("ha_reports_details"), expanded=False):
+            summary = pd.DataFrame(
+                [
+                    {
+                        t("col_date"): d["finish"].strftime("%Y-%m-%d %H:%M"),
+                        t("ha_reports_col_file"): uf.name,
+                        t("ha_reports_col_source"): (
+                            t("ha_reports_source_drive")
+                            if getattr(uf, "source", None) == "drive"
+                            else t("ha_reports_source_manual")
+                        ),
+                    }
+                    for uf, d in ok_rows
+                ]
+            ).sort_values(t("col_date"), ascending=False)
+            st.dataframe(summary, width="stretch", hide_index=True, key="ha_reports_summary_table")
+
+    for name, reason in failed:
+        st.error(t("ha_reports_upload_failed").format(name=name, reason=reason))
+
+    if not ok_rows:
+        return
+
+    reports_df = load_ha_reports([uf for uf, _ in ok_rows])
     if reports_df.empty:
         st.warning(t("ha_reports_parse_error"))
         return
 
-    st.caption(t("ha_reports_loaded_count").format(n=len(reports_df)))
+    # --- Карты из HTML-отчётов ---
+    with st.expander(t("ha_maps_title"), expanded=False):
+        st.caption(t("ha_maps_explainer"))
+        if not maps_are_unlocked():
+            render_maps_locked_placeholder()
+        else:
+            file_by_name = {uf.name: uf for uf in ha_files}
+            chosen_file_name = st.selectbox(
+                t("ha_maps_select_report"), list(file_by_name.keys()), key="ha_maps_report_select"
+            )
+            maps = parse_ha_html_maps(file_by_name[chosen_file_name].getvalue())
+            if not maps:
+                st.info(t("ha_maps_no_maps"))
+            else:
+                lang = st.session_state.get("lang", "pl")
+                map_labels = {
+                    name: HA_MAP_TITLES.get(name, {}).get(lang, name) for name in maps
+                }
+                chosen_map = st.selectbox(
+                    t("ha_maps_select_map"),
+                    list(maps.keys()),
+                    format_func=lambda n: map_labels[n],
+                    key="ha_maps_map_select",
+                )
+                points = maps[chosen_map]
+                render_ha_html_map(chosen_map, points)
+                # Если весь трек укладывается в крошечное пятно — это признак
+                # потери GPS-сигнала, а не реального маршрута.
+                lat_span_m = (points["lat"].max() - points["lat"].min()) * 111_000
+                lon_span_m = (points["lon"].max() - points["lon"].min()) * 111_000 * 0.62
+                if max(lat_span_m, lon_span_m) < 100:
+                    st.warning(t("ha_maps_gps_warning"))
 
     lang = st.session_state.get("lang", "pl")
 
@@ -3345,7 +3951,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
         fig.add_trace(go.Scatter(x=reports_df["finish"], y=reports_df.get("soc_gained_brakings"), name=t("ha_soc_brakings"), mode="lines+markers"))
         fig.add_trace(go.Scatter(x=reports_df["finish"], y=reports_df.get("soc_gained_coasting"), name=t("ha_soc_coasting"), mode="lines+markers"))
         fig.add_trace(go.Scatter(x=reports_df["finish"], y=reports_df.get("soc_charged_by_ice"), name=t("ha_soc_ice"), mode="lines+markers"))
-        fig.update_layout(height=320, yaxis_title="%")
+        fig.update_layout(height=rsp_height(320), yaxis_title="%")
         st.plotly_chart(fig, width="stretch", key="tab4_ha_soc_trend")
         st.caption(t("ha_trend_soc_note"))
         if "soc_gained_brakings" in reports_df.columns:
@@ -3354,7 +3960,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
     with st.expander(t("ha_trend_glide_title")):
         if "glide_score" in reports_df.columns:
             fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["glide_score"], mode="lines+markers"))
-            fig.update_layout(height=300, yaxis_title=t("ha_glide_score"))
+            fig.update_layout(height=rsp_height(300), yaxis_title=t("ha_glide_score"))
             st.plotly_chart(fig, width="stretch", key="tab4_ha_glide_trend")
             st.caption(t("ha_trend_glide_note"))
             _trend_check(reports_df["glide_score"], reports_df["finish"], "ha_trend_glide_warn", "ha_trend_glide_ok")
@@ -3366,19 +3972,19 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
         with c1:
             if "accel_nervousness" in reports_df.columns:
                 fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["accel_nervousness"], mode="lines+markers"))
-                fig.update_layout(height=280, yaxis_title=t("ha_accel_nervousness"))
+                fig.update_layout(height=rsp_height(280), yaxis_title=t("ha_accel_nervousness"))
                 st.plotly_chart(fig, width="stretch", key="tab4_ha_accel_nervousness")
         with c2:
             if "braking_efficiency" in reports_df.columns:
                 fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["braking_efficiency"], mode="lines+markers"))
-                fig.update_layout(height=280, yaxis_title=t("ha_braking_efficiency"))
+                fig.update_layout(height=rsp_height(280), yaxis_title=t("ha_braking_efficiency"))
                 st.plotly_chart(fig, width="stretch", key="tab4_ha_braking_efficiency")
         st.caption(t("ha_trend_driver_note"))
 
     with st.expander(t("ha_bsfc_crosscheck_title")):
         if "bsfc_avg_report" in reports_df.columns:
             fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["bsfc_avg_report"], mode="lines+markers", name="BSFC (отчёт HA)"))
-            fig.update_layout(height=280, yaxis_title="g/kWh")
+            fig.update_layout(height=rsp_height(280), yaxis_title="g/kWh")
             st.plotly_chart(fig, width="stretch", key="tab4_ha_bsfc_crosscheck")
             st.caption(t("ha_bsfc_crosscheck_note"))
         else:
@@ -3441,21 +4047,67 @@ def render_tab5(db_path, file_version):
     st.subheader(t("add_record_header"))
 
     # --- Распознавание фактуры через Gemini ---
+    st.markdown(f"**{t('invoice_section_title')}**")
     if GENAI_AVAILABLE and get_gemini_api_key():
-        uploaded_invoice = st.file_uploader(t("invoice_upload_label"), type=["jpg", "jpeg", "png"], key="invoice_uploader")
-        if uploaded_invoice is not None and st.session_state.get("last_invoice_name") != uploaded_invoice.name:
-            with st.spinner(t("invoice_processing")):
-                data = extract_invoice_data(uploaded_invoice.getvalue(), uploaded_invoice.type or "image/jpeg")
-            st.session_state["last_invoice_name"] = uploaded_invoice.name
-            if "error" in data:
-                st.error(t("invoice_error").format(error=data["error"]))
-            else:
-                st.session_state["invoice_prefill_date"] = data.get("date")
-                st.session_state["invoice_prefill_odo"] = data.get("odo")
-                st.session_state["invoice_prefill_desc"] = data.get("desc")
-                st.success(t("invoice_success"))
+        st.caption(t("invoice_how_it_works"))
+        uploaded_invoice = st.file_uploader(
+            t("invoice_upload_label"),
+            type=["jpg", "jpeg", "png"],
+            key="invoice_uploader",
+            help=t("invoice_upload_help"),
+        )
+        if uploaded_invoice is not None:
+            preview_col, result_col = st.columns([1, 2])
+            with preview_col:
+                st.image(uploaded_invoice, caption=uploaded_invoice.name, width="stretch")
+
+            with result_col:
+                # Распознаём только при появлении НОВОГО файла, иначе каждый
+                # клик по странице заново дёргал бы платный API.
+                if st.session_state.get("last_invoice_name") != uploaded_invoice.name:
+                    with st.spinner(t("invoice_processing")):
+                        data = extract_invoice_data(
+                            uploaded_invoice.getvalue(), uploaded_invoice.type or "image/jpeg"
+                        )
+                    st.session_state["last_invoice_name"] = uploaded_invoice.name
+                    st.session_state["last_invoice_result"] = data
+
+                data = st.session_state.get("last_invoice_result", {})
+                if not data:
+                    st.info(t("invoice_waiting"))
+                elif "error" in data:
+                    st.error(t("invoice_error").format(error=data["error"]))
+                    st.caption(t("invoice_error_hint"))
+                else:
+                    recognized_date = data.get("date")
+                    recognized_odo = data.get("odo")
+                    recognized_desc = data.get("desc")
+                    st.session_state["invoice_prefill_date"] = recognized_date
+                    st.session_state["invoice_prefill_odo"] = recognized_odo
+                    st.session_state["invoice_prefill_desc"] = recognized_desc
+
+                    missing = [
+                        label
+                        for value, label in (
+                            (recognized_date, t("form_date")),
+                            (recognized_odo, t("form_mileage")),
+                            (recognized_desc, t("form_description")),
+                        )
+                        if not value
+                    ]
+                    if missing:
+                        st.warning(t("invoice_partial").format(fields=", ".join(missing)))
+                    else:
+                        st.success(t("invoice_success"))
+
+                    st.markdown(
+                        f"- **{t('form_date')}:** {recognized_date or '—'}\n"
+                        f"- **{t('form_mileage')}:** {recognized_odo or '—'}\n"
+                        f"- **{t('form_description')}:** {recognized_desc or '—'}"
+                    )
+                    st.caption(t("invoice_check_before_save"))
     else:
-        st.caption(t("invoice_unavailable"))
+        st.info(t("invoice_unavailable"))
 
     if not _render_password_gate(
         "maintenance", "maintenance_password_hash", _FALLBACK_PASSWORD_HASH, "maintenance_unlocked",
@@ -3500,6 +4152,8 @@ def main():
         st.session_state["lang"] = "pl"
 
     st.set_page_config(page_title=t("page_title"), page_icon="🚗", layout="wide")
+
+    inject_responsive_css()
 
     ensure_map_code_dialog_shown()
 
