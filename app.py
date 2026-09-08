@@ -100,7 +100,7 @@ DB_REFRESH_COOLDOWN_SECONDS = 40  # скачивание занимает ~30 с
 # неё файлы — отсюда зависания и битые/неполные скачивания. Блокировка
 # ниже гарантирует, что параллельные вызовы выполняются строго по одному.
 _download_lock = threading.Lock()
-DB_CACHE_TTL_SECONDS = 30 * 60  # 30 минут между автоматическими обновлениями
+DB_CACHE_TTL_SECONDS = 8 * 60 * 60  # автообновление 3 раза в сутки (каждые 8 часов)
 
 MAINTENANCE_FILE = "maintenance.json"
 DR_PRIUS_UPLOAD_DIR = "/tmp/dr_prius_logs"
@@ -242,6 +242,8 @@ TR = {
         "app_title": "🚗 Toyota Yaris 4 Hybrid (2021) — Полная диагностика",
         "language_label": "Язык / Language",
         "refresh_db_button": "🔄 Обновить базу данных",
+        "map_style_label": "Стиль карты",
+        "db_autorefresh_note": "База обновляется автоматически 3 раза в сутки (каждые 8 часов). Кнопка ниже — если нужно прямо сейчас.",
         "db_last_loaded": "База данных загружена: {timestamp}",
         "downloading_db": "Загрузка базы данных с Google Диска (обычно занимает 20-30 секунд, не закрывайте страницу)…",
         "refresh_in_progress_warning": "⏳ Обновление уже запущено — подождите примерно 30 секунд, повторное нажатие сейчас только всё замедлит.",
@@ -609,6 +611,8 @@ TR = {
         "app_title": "🚗 Toyota Yaris 4 Hybrid (2021) — Pełna diagnostyka",
         "language_label": "Język / Язык",
         "refresh_db_button": "🔄 Odśwież bazę danych",
+        "map_style_label": "Styl mapy",
+        "db_autorefresh_note": "Baza odświeża się automatycznie 3 razy na dobę (co 8 godzin). Przycisk poniżej — jeśli potrzebujesz od razu.",
         "db_last_loaded": "Baza danych wczytana: {timestamp}",
         "downloading_db": "Pobieranie bazy danych z Google Drive (zwykle trwa 20-30 sekund, nie zamykaj strony)…",
         "refresh_in_progress_warning": "⏳ Odświeżanie już trwa — poczekaj około 30 sekund, ponowne kliknięcie teraz tylko to spowolni.",
@@ -1956,6 +1960,82 @@ def render_maps_locked_placeholder() -> None:
 
 _DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
 
+# ============================================================
+# СТИЛИ ОТОБРАЖЕНИЯ КАРТ
+# ============================================================
+# Часть стилей встроена в Plotly (не требует ничего), часть
+# подключается как растровые тайлы по ссылке.
+# Stadia (Alidade Smooth Dark): бесплатно до 2500 просмотров в сутки для
+# некоммерческого использования; ключ необязателен, но если он есть —
+# положите его в Secrets как stadia_api_key, чтобы не упереться в лимит.
+# Esri World Topo: бесплатно, без ключа. Внимание: у Esri порядок
+# координат в ссылке {z}/{y}/{x}, а не {z}/{x}/{y}, как у большинства.
+
+MAP_STYLE_OPTIONS = {
+    "carto-darkmatter": {
+        "builtin": "carto-darkmatter",
+        "label": {"ru": "CartoDB Dark Matter (тёмная)", "pl": "CartoDB Dark Matter (ciemna)"},
+    },
+    "alidade-smooth-dark": {
+        "raster": "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}@2x.png",
+        "attribution": "© Stadia Maps © OpenMapTiles © OpenStreetMap contributors",
+        "needs_key": True,
+        "label": {"ru": "Alidade Smooth Dark", "pl": "Alidade Smooth Dark"},
+    },
+    "esri-world-topo": {
+        "raster": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+        "attribution": "© Esri — Esri, DeLorme, NAVTEQ, TomTom, USGS",
+        "label": {"ru": "Esri World Topo (рельеф)", "pl": "Esri World Topo (topograficzna)"},
+    },
+    "carto-positron": {
+        "builtin": "carto-positron",
+        "label": {"ru": "CartoDB Positron (светлая)", "pl": "CartoDB Positron (jasna)"},
+    },
+    "open-street-map": {
+        "builtin": "open-street-map",
+        "label": {"ru": "OpenStreetMap", "pl": "OpenStreetMap"},
+    },
+}
+
+DEFAULT_MAP_STYLE = "carto-darkmatter"
+
+
+def get_selected_map_style() -> str:
+    style = st.session_state.get("map_style_choice", DEFAULT_MAP_STYLE)
+    return style if style in MAP_STYLE_OPTIONS else DEFAULT_MAP_STYLE
+
+
+def build_map_config(center_lat: float, center_lon: float, zoom: float) -> dict:
+    """Собирает секцию map=... для Plotly с учётом выбранного стиля."""
+    style_key = get_selected_map_style()
+    cfg = MAP_STYLE_OPTIONS.get(style_key, MAP_STYLE_OPTIONS[DEFAULT_MAP_STYLE])
+    base = {"center": {"lat": center_lat, "lon": center_lon}, "zoom": zoom}
+
+    if "builtin" in cfg:
+        base["style"] = cfg["builtin"]
+        return base
+
+    url = cfg["raster"]
+    if cfg.get("needs_key"):
+        try:
+            api_key = st.secrets.get("stadia_api_key")
+        except Exception:
+            api_key = None
+        if api_key:
+            url = f"{url}?api_key={api_key}"
+
+    base["style"] = "white-bg"
+    base["layers"] = [
+        {
+            "below": "traces",
+            "sourcetype": "raster",
+            "sourceattribution": cfg.get("attribution", ""),
+            "source": [url],
+        }
+    ]
+    return base
+
+
 
 @st.cache_resource(show_spinner=False)
 def get_drive_service():
@@ -2419,6 +2499,20 @@ def render_sidebar():
         st.sidebar.caption(t("device_current").format(device=detected_label))
 
     st.sidebar.divider()
+    lang_now = st.session_state.get("lang", "pl")
+    style_keys = list(MAP_STYLE_OPTIONS.keys())
+    current_style = get_selected_map_style()
+    chosen_style = st.sidebar.selectbox(
+        t("map_style_label"),
+        options=style_keys,
+        format_func=lambda k: MAP_STYLE_OPTIONS[k]["label"].get(lang_now, k),
+        index=style_keys.index(current_style),
+        key="map_style_select",
+    )
+    st.session_state["map_style_choice"] = chosen_style
+
+    st.sidebar.divider()
+    st.sidebar.caption(t("db_autorefresh_note"))
     if st.sidebar.button(t("refresh_db_button"), width="stretch"):
         last_refresh = st.session_state.get("db_refresh_triggered_at", 0.0)
         if time.time() - last_refresh < DB_REFRESH_COOLDOWN_SECONDS:
@@ -2538,7 +2632,7 @@ def _build_route_map_figure(trip_log: pd.DataFrame, parameter: str = "mode") -> 
     center_lat = points["GPS_LAT"].mean()
     center_lon = points["GPS_LON"].mean()
     fig.update_layout(
-        map=dict(style="open-street-map", center=dict(lat=center_lat, lon=center_lon), zoom=13),
+        map=build_map_config(center_lat, center_lon, 13),
         margin=dict(l=0, r=0, t=0, b=0),
         height=rsp_height(450),
         showlegend=False,
@@ -2951,10 +3045,8 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
                     )
                 )
                 grid_fig.update_layout(
-                    map=dict(
-                        style="open-street-map",
-                        center=dict(lat=points["GPS_LAT"].mean(), lon=points["GPS_LON"].mean()),
-                        zoom=10,
+                    map=build_map_config(
+                        points["GPS_LAT"].mean(), points["GPS_LON"].mean(), 10
                     ),
                     margin=dict(l=0, r=0, t=0, b=0),
                     height=rsp_height(400),
@@ -3993,11 +4085,7 @@ def render_ha_html_map(map_name: str, points: pd.DataFrame, key_prefix: str = "t
         )
 
     fig.update_layout(
-        map=dict(
-            style="open-street-map",
-            center=dict(lat=points["lat"].mean(), lon=points["lon"].mean()),
-            zoom=11,
-        ),
+        map=build_map_config(points["lat"].mean(), points["lon"].mean(), 11),
         margin=dict(l=0, r=0, t=0, b=0),
         height=rsp_height(460),
         legend=dict(orientation="h", yanchor="bottom", y=0.01, xanchor="left", x=0.01,
