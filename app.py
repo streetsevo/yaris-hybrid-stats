@@ -288,6 +288,10 @@ TR = {
         "map_period_year": "Год",
         "map_period_avg_consumption": "Средний расход за период: {value} л/100км",
         "fuel_forecast_badge": "🔮 (прогноз)",
+        "unit_kmh": "км/ч",
+        "unit_l100km": "л/100км",
+        "unit_rpm": "об/мин",
+        "unit_nm": "Нм",
         "fuel_forecast_help": "Оценка ЭБУ по длительности впрыска (данные Hybrid Assistant) — не прямое измерение топлива.",
         "fuel_real_badge": "🧾 (реально)",
         "fuel_real_badge_note": "🧾 Реальный расход по чекам АЗС (отчёт Fuelio), в отличие от прогноза ЭБУ — это подтверждённые литры и стоимость.",
@@ -565,6 +569,10 @@ TR = {
         "map_period_year": "Rok",
         "map_period_avg_consumption": "Średnie spalanie w okresie: {value} l/100km",
         "fuel_forecast_badge": "🔮 (prognoza)",
+        "unit_kmh": "km/h",
+        "unit_l100km": "l/100km",
+        "unit_rpm": "obr/min",
+        "unit_nm": "Nm",
         "fuel_forecast_help": "Szacunek sterownika na podstawie czasu wtrysku (dane Hybrid Assistant) — nie jest to bezpośredni pomiar paliwa.",
         "fuel_real_badge": "🧾 (rzeczywisty)",
         "fuel_real_badge_note": "🧾 Rzeczywiste spalanie wg paragonów ze stacji (raport Fuelio) — w odróżnieniu od prognozy sterownika, to potwierdzone litry i koszt.",
@@ -1971,7 +1979,7 @@ def _render_fuel_log_section(fuel_df: pd.DataFrame) -> None:
                 avg_cons = sub["consumption_l100"].dropna().mean()
                 st.metric(
                     f"{t('fuel_avg_consumption')} {t('fuel_real_badge')}",
-                    f"{avg_cons:.2f} л/100км" if pd.notna(avg_cons) else "—",
+                    f'{avg_cons:.2f} {t("unit_l100km")}' if pd.notna(avg_cons) else "—",
                 )
             else:
                 st.markdown(f"**{t('fuel_avg_consumption')} {t('fuel_real_badge')}**")
@@ -2538,13 +2546,13 @@ def render_trip_report_sections(report: dict, lang: str) -> None:
             key="matrix_table_1",
         )
         c1, c2, c3 = st.columns(3)
-        c1.metric(t("rep_speed_avg"), fmt(s["speed_avg"], " км/ч", 0))
-        c2.metric(t("rep_speed_max"), fmt(s["speed_max"], " км/ч", 0))
-        c3.metric(t("rep_speed_ev_avg"), fmt(s["speed_ev_avg"], " км/ч", 0))
+        c1.metric(t("rep_speed_avg"), fmt(s["speed_avg"], f' {t("unit_kmh")}', 0))
+        c2.metric(t("rep_speed_max"), fmt(s["speed_max"], f' {t("unit_kmh")}', 0))
+        c3.metric(t("rep_speed_ev_avg"), fmt(s["speed_ev_avg"], f' {t("unit_kmh")}', 0))
         c4, c5, c6 = st.columns(3)
         c4.metric(t("rep_soc_start_end"), f"{fmt(s['soc_start'], '%', 0)} → {fmt(s['soc_end'], '%', 0)}")
         c5.metric(t("rep_ambient_avg"), fmt(s["ambient_avg"], " °C", 0))
-        c6.metric(f"{t('rep_fuel_consumption')} {t('fuel_forecast_badge')}", fmt(f["consumption_l100"], " л/100км", 2), help=t("fuel_forecast_help"))
+        c6.metric(f"{t('rep_fuel_consumption')} {t('fuel_forecast_badge')}", fmt(f["consumption_l100"], f' {t("unit_l100km")}', 2), help=t("fuel_forecast_help"))
         st.caption(t("rep_ev_time_note"))
 
     with st.expander(t("rep_soc_title")):
@@ -2782,11 +2790,11 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
     with st.expander(t("rep_charts_title")):
         st.markdown(f"#### {t('logs_chart_speed_rpm')}")
         fig1 = go.Figure()
-        fig1.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["SPEED_OBD"], name="Speed (км/ч)", line=dict(color="#1f77b4")))
+        fig1.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["SPEED_OBD"], name=f'Speed ({t("unit_kmh")})', line=dict(color="#1f77b4")))
         fig1.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["ICE_RPM"], name="ICE RPM", yaxis="y2", line=dict(color="#d62728")))
         fig1.update_layout(
-            yaxis=dict(title="км/ч"),
-            yaxis2=dict(title="об/мин", overlaying="y", side="right"),
+            yaxis=dict(title=t("unit_kmh")),
+            yaxis2=dict(title=t("unit_rpm"), overlaying="y", side="right"),
             height=380,
             legend=dict(orientation="h"),
         )
@@ -2826,11 +2834,11 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
         fig4 = go.Figure()
         fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG1_TORQUE"], name="MG1 момент (Нм)", line=dict(color="#17becf")))
         fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG2_TORQUE"], name="MG2 момент (Нм)", line=dict(color="#bcbd22")))
-        fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG1_RPM"], name="MG1 об/мин", yaxis="y2", line=dict(color="#17becf", dash="dot")))
-        fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG2_RPM"], name="MG2 об/мин", yaxis="y2", line=dict(color="#bcbd22", dash="dot")))
+        fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG1_RPM"], name=f'MG1 {t("unit_rpm")}', yaxis="y2", line=dict(color="#17becf", dash="dot")))
+        fig4.add_trace(go.Scatter(x=trip_log["datetime"], y=trip_log["MG2_RPM"], name=f'MG2 {t("unit_rpm")}', yaxis="y2", line=dict(color="#bcbd22", dash="dot")))
         fig4.update_layout(
-            yaxis=dict(title="Нм"),
-            yaxis2=dict(title="об/мин", overlaying="y", side="right"),
+            yaxis=dict(title=t("unit_nm")),
+            yaxis2=dict(title=t("unit_rpm"), overlaying="y", side="right"),
             height=380,
             legend=dict(orientation="h"),
         )
@@ -3252,7 +3260,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
             fig = go.Figure(
                 go.Scatter(x=lpg_df["date"], y=lpg_df["consumption_l100"], mode="lines+markers", name=t("fuel_type_lpg"))
             )
-            fig.update_layout(height=300, yaxis_title="л/100км")
+            fig.update_layout(height=300, yaxis_title=t("unit_l100km"))
             st.plotly_chart(fig, width="stretch", key="tab4_fuel_lpg_trend")
             st.caption(t("fuel_real_badge_note"))
 
@@ -3283,7 +3291,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
                     sub = fuel_monthly[fuel_monthly["fuel_type"] == ftype]
                     if not sub.empty:
                         fig2.add_trace(go.Scatter(x=sub["month"], y=sub["consumption_l100"], name=f"{t(label_key)} {t('fuel_real_badge')}", mode="lines+markers"))
-                fig2.update_layout(height=320, yaxis_title="л/100км", legend=dict(orientation="h"))
+                fig2.update_layout(height=320, yaxis_title=t("unit_l100km"), legend=dict(orientation="h"))
                 st.plotly_chart(fig2, width="stretch", key="tab4_fuel_crosscheck")
                 st.caption(t("fuel_crosscheck_note"))
 
