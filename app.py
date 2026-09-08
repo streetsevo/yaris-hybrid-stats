@@ -61,6 +61,7 @@ import re
 import shutil
 import sqlite3
 import time
+import traceback
 from datetime import date, datetime, timedelta
 
 import gdown
@@ -804,13 +805,22 @@ def download_database() -> str:
         shutil.rmtree(folder_path, ignore_errors=True)
     os.makedirs(folder_path, exist_ok=True)
 
-    gdown.download_folder(id=GDRIVE_FOLDER_ID, output=folder_path, quiet=True, use_cookies=False)
+    print(f"[download_database] начинаю скачивание папки {GDRIVE_FOLDER_ID} -> {folder_path}", flush=True)
+    t0 = time.time()
+    try:
+        gdown.download_folder(id=GDRIVE_FOLDER_ID, output=folder_path, quiet=True, use_cookies=False)
+    except Exception as e:
+        print(f"[download_database] gdown.download_folder упал за {time.time() - t0:.1f} сек: {e!r}", flush=True)
+        raise
+    print(f"[download_database] gdown.download_folder завершился за {time.time() - t0:.1f} сек", flush=True)
 
     db_candidates = []
     for root, _dirs, files in os.walk(folder_path):
         for fname in files:
             if fname.lower().endswith(".db"):
                 db_candidates.append(os.path.join(root, fname))
+
+    print(f"[download_database] найдено файлов .db: {len(db_candidates)}: {db_candidates}", flush=True)
 
     if not db_candidates:
         raise RuntimeError(
@@ -1342,7 +1352,7 @@ def _map_access_code_dialog():
     if remaining > 0:
         minutes, seconds = divmod(remaining, 60)
         st.error(t("code_locked").format(minutes=minutes, seconds=seconds))
-        if st.button(t("map_code_close_button"), use_container_width=True):
+        if st.button(t("map_code_close_button"), width="stretch"):
             st.session_state["map_dialog_completed"] = True
             st.session_state["map_unlocked"] = False
             st.rerun()
@@ -1351,8 +1361,8 @@ def _map_access_code_dialog():
     code_input = st.text_input(t("map_code_label"), type="password", key="map_code_dialog_input")
 
     col_check, col_close = st.columns(2)
-    check_clicked = col_check.button(f"✅ {t('map_code_check_button')}", use_container_width=True)
-    close_clicked = col_close.button(f"❌ {t('map_code_close_button')}", use_container_width=True)
+    check_clicked = col_check.button(f"✅ {t('map_code_check_button')}", width="stretch")
+    close_clicked = col_close.button(f"❌ {t('map_code_close_button')}", width="stretch")
 
     if check_clicked:
         if _verify_secret(code_input, "map_access_code_hash", _FALLBACK_MAP_CODE_HASH):
@@ -1682,7 +1692,7 @@ def render_sidebar():
     st.session_state["lang"] = choice
 
     st.sidebar.divider()
-    if st.sidebar.button(t("refresh_db_button"), use_container_width=True):
+    if st.sidebar.button(t("refresh_db_button"), width="stretch"):
         download_database.clear()
         st.rerun()
 
@@ -1962,7 +1972,7 @@ def _render_fuel_log_section(fuel_df: pd.DataFrame) -> None:
         )
     if fig.data:
         fig.update_layout(height=350, yaxis_title=metric_options[selected_metric], legend=dict(orientation="h"))
-        st.plotly_chart(fig, use_container_width=True, key="tab1_fuel_trend_chart")
+        st.plotly_chart(fig, width="stretch", key="tab1_fuel_trend_chart")
     else:
         st.info(t("not_enough_data"))
     st.caption(t("fuel_real_badge_note"))
@@ -2018,7 +2028,7 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
                     format_func=lambda k: param_options[k],
                     key="map_param_select",
                 )
-                st.plotly_chart(_build_route_map_figure(trip_log, selected_param), use_container_width=True, key="tab1_route_map")
+                st.plotly_chart(_build_route_map_figure(trip_log, selected_param), width="stretch", key="tab1_route_map")
                 _render_map_legend(selected_param)
                 if _gps_frozen_ratio(trip_log) > 0.3:
                     st.warning(t("gps_signal_lost_warning"))
@@ -2076,7 +2086,7 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
                     margin=dict(l=0, r=0, t=0, b=0),
                     height=400,
                 )
-                st.plotly_chart(grid_fig, use_container_width=True, key="tab1_period_map")
+                st.plotly_chart(grid_fig, width="stretch", key="tab1_period_map")
                 if pd.notna(period_avg_consumption):
                     st.markdown(
                         f"### {t('map_period_avg_consumption').format(value=f'{period_avg_consumption:.1f}')} {t('fuel_forecast_badge')}"
@@ -2207,7 +2217,7 @@ def _render_matrix_table(row_labels: list, col_labels: list, data: list, key: st
     """Универсальная таблица со значениями (как в отчёте HA): строки —
     row_labels (Avg/Min/Max...), колонки — col_labels (Current/Voltage...)."""
     df = pd.DataFrame(data, index=row_labels, columns=col_labels)
-    st.dataframe(df, use_container_width=True, key=key)
+    st.dataframe(df, width="stretch", key=key)
 
 
 def compute_trip_report(trip_log: pd.DataFrame, trip_row: pd.Series, battlog_probe_log: pd.DataFrame) -> dict:
@@ -2720,7 +2730,7 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
                     format_func=lambda k: param_options[k],
                     key="tab2_map_param_select",
                 )
-                st.plotly_chart(_build_route_map_figure(trip_log, selected_param), use_container_width=True, key="tab2_route_map")
+                st.plotly_chart(_build_route_map_figure(trip_log, selected_param), width="stretch", key="tab2_route_map")
                 _render_map_legend(selected_param)
                 if _gps_frozen_ratio(trip_log) > 0.3:
                     st.warning(t("gps_signal_lost_warning"))
@@ -2739,7 +2749,7 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
             height=380,
             legend=dict(orientation="h"),
         )
-        st.plotly_chart(fig1, use_container_width=True, key="tab2_chart_speed_rpm")
+        st.plotly_chart(fig1, width="stretch", key="tab2_chart_speed_rpm")
 
         st.markdown(f"#### {t('logs_chart_hv')}")
         fig2 = go.Figure()
@@ -2751,7 +2761,7 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
             height=380,
             legend=dict(orientation="h"),
         )
-        st.plotly_chart(fig2, use_container_width=True, key="tab2_chart_hv")
+        st.plotly_chart(fig2, width="stretch", key="tab2_chart_hv")
 
         st.markdown(f"#### {t('logs_chart_temps')}")
         fig3 = go.Figure()
@@ -2769,7 +2779,7 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
         else:
             st.caption(t("logs_no_battlog"))
         fig3.update_layout(yaxis=dict(title="°C"), height=380, legend=dict(orientation="h"))
-        st.plotly_chart(fig3, use_container_width=True, key="tab2_chart_temps")
+        st.plotly_chart(fig3, width="stretch", key="tab2_chart_temps")
 
         st.markdown(f"#### {t('logs_chart_mg')}")
         fig4 = go.Figure()
@@ -2783,7 +2793,7 @@ def render_tab2(trips_df, fastlog_df, db_path, file_version):
             height=380,
             legend=dict(orientation="h"),
         )
-        st.plotly_chart(fig4, use_container_width=True, key="tab2_chart_mg")
+        st.plotly_chart(fig4, width="stretch", key="tab2_chart_mg")
         st.caption(t("logs_mg_note"))
 
 
@@ -2825,13 +2835,13 @@ def render_tab3():
         st.markdown(f"#### {t('drprius_resistance_chart')}")
         fig_r = go.Figure(go.Bar(x=[f"#{b}" for b in block_nums], y=resistances, marker_color="#ff7f0e"))
         fig_r.update_layout(height=350)
-        st.plotly_chart(fig_r, use_container_width=True, key="tab3_resistance_chart")
+        st.plotly_chart(fig_r, width="stretch", key="tab3_resistance_chart")
 
     if any(v is not None for v in voltages):
         st.markdown(f"#### {t('drprius_voltage_chart')}")
         fig_v = go.Figure(go.Bar(x=[f"#{b}" for b in block_nums], y=voltages, marker_color="#2ca02c"))
         fig_v.update_layout(height=350)
-        st.plotly_chart(fig_v, use_container_width=True, key="tab3_voltage_chart")
+        st.plotly_chart(fig_v, width="stretch", key="tab3_voltage_chart")
 
     st.divider()
     st.markdown(f"#### {t('drprius_wear_title')}")
@@ -3152,7 +3162,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
         color = "color: red; font-weight: bold" if row[t("compare_col_diff_flag")] == t("compare_diff_high") else ""
         return [color] * len(row)
 
-    st.dataframe(df_compare.style.apply(_highlight, axis=1), use_container_width=True, hide_index=True)
+    st.dataframe(df_compare.style.apply(_highlight, axis=1), width="stretch", hide_index=True)
 
     st.divider()
 
@@ -3161,12 +3171,12 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
         soh_series = cell_df["cell_delta"].apply(calculate_soh)
         fig_soh = go.Figure(go.Scatter(x=cell_df["timestamp"], y=soh_series, mode="lines+markers"))
         fig_soh.update_layout(height=300, yaxis_title="SOH %")
-        st.plotly_chart(fig_soh, use_container_width=True, key="tab4_soh_trend")
+        st.plotly_chart(fig_soh, width="stretch", key="tab4_soh_trend")
 
         st.markdown(f"#### {t('compare_trend_delta')}")
         fig_delta = go.Figure(go.Scatter(x=cell_df["timestamp"], y=cell_df["cell_delta"], mode="lines+markers"))
         fig_delta.update_layout(height=300, yaxis_title="Delta, В")
-        st.plotly_chart(fig_delta, use_container_width=True, key="tab4_delta_trend")
+        st.plotly_chart(fig_delta, width="stretch", key="tab4_delta_trend")
     else:
         st.info(t("no_cell_data"))
 
@@ -3186,7 +3196,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
                 sub = pivot[pivot["year"] == yr]
                 fig_season.add_trace(go.Scatter(x=sub["month_num"], y=sub["battery_temp"], name=str(yr), mode="lines+markers"))
             fig_season.update_layout(height=300, xaxis_title="Месяц", yaxis_title="°C ВВБ")
-            st.plotly_chart(fig_season, use_container_width=True, key="tab4_seasonal_chart")
+            st.plotly_chart(fig_season, width="stretch", key="tab4_seasonal_chart")
     else:
         st.info(t("not_enough_data"))
 
@@ -3202,7 +3212,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
                 go.Scatter(x=lpg_df["date"], y=lpg_df["consumption_l100"], mode="lines+markers", name=t("fuel_type_lpg"))
             )
             fig.update_layout(height=300, yaxis_title="л/100км")
-            st.plotly_chart(fig, use_container_width=True, key="tab4_fuel_lpg_trend")
+            st.plotly_chart(fig, width="stretch", key="tab4_fuel_lpg_trend")
             st.caption(t("fuel_real_badge_note"))
 
             x = (pd.to_datetime(lpg_df["date"]) - pd.to_datetime(lpg_df["date"]).min()).dt.total_seconds().to_numpy()
@@ -3233,7 +3243,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
                     if not sub.empty:
                         fig2.add_trace(go.Scatter(x=sub["month"], y=sub["consumption_l100"], name=f"{t(label_key)} {t('fuel_real_badge')}", mode="lines+markers"))
                 fig2.update_layout(height=320, yaxis_title="л/100км", legend=dict(orientation="h"))
-                st.plotly_chart(fig2, use_container_width=True, key="tab4_fuel_crosscheck")
+                st.plotly_chart(fig2, width="stretch", key="tab4_fuel_crosscheck")
                 st.caption(t("fuel_crosscheck_note"))
 
     # --- HTML-отчёты Hybrid Assistant: доп. тренды, которых нет в БД ---
@@ -3287,7 +3297,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
         fig.add_trace(go.Scatter(x=reports_df["finish"], y=reports_df.get("soc_gained_coasting"), name=t("ha_soc_coasting"), mode="lines+markers"))
         fig.add_trace(go.Scatter(x=reports_df["finish"], y=reports_df.get("soc_charged_by_ice"), name=t("ha_soc_ice"), mode="lines+markers"))
         fig.update_layout(height=320, yaxis_title="%")
-        st.plotly_chart(fig, use_container_width=True, key="tab4_ha_soc_trend")
+        st.plotly_chart(fig, width="stretch", key="tab4_ha_soc_trend")
         st.caption(t("ha_trend_soc_note"))
         if "soc_gained_brakings" in reports_df.columns:
             _trend_check(reports_df["soc_gained_brakings"], reports_df["finish"], "ha_trend_brakings_warn", "ha_trend_brakings_ok")
@@ -3296,7 +3306,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
         if "glide_score" in reports_df.columns:
             fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["glide_score"], mode="lines+markers"))
             fig.update_layout(height=300, yaxis_title=t("ha_glide_score"))
-            st.plotly_chart(fig, use_container_width=True, key="tab4_ha_glide_trend")
+            st.plotly_chart(fig, width="stretch", key="tab4_ha_glide_trend")
             st.caption(t("ha_trend_glide_note"))
             _trend_check(reports_df["glide_score"], reports_df["finish"], "ha_trend_glide_warn", "ha_trend_glide_ok")
         else:
@@ -3308,19 +3318,19 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
             if "accel_nervousness" in reports_df.columns:
                 fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["accel_nervousness"], mode="lines+markers"))
                 fig.update_layout(height=280, yaxis_title=t("ha_accel_nervousness"))
-                st.plotly_chart(fig, use_container_width=True, key="tab4_ha_accel_nervousness")
+                st.plotly_chart(fig, width="stretch", key="tab4_ha_accel_nervousness")
         with c2:
             if "braking_efficiency" in reports_df.columns:
                 fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["braking_efficiency"], mode="lines+markers"))
                 fig.update_layout(height=280, yaxis_title=t("ha_braking_efficiency"))
-                st.plotly_chart(fig, use_container_width=True, key="tab4_ha_braking_efficiency")
+                st.plotly_chart(fig, width="stretch", key="tab4_ha_braking_efficiency")
         st.caption(t("ha_trend_driver_note"))
 
     with st.expander(t("ha_bsfc_crosscheck_title")):
         if "bsfc_avg_report" in reports_df.columns:
             fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["bsfc_avg_report"], mode="lines+markers", name="BSFC (отчёт HA)"))
             fig.update_layout(height=280, yaxis_title="g/kWh")
-            st.plotly_chart(fig, use_container_width=True, key="tab4_ha_bsfc_crosscheck")
+            st.plotly_chart(fig, width="stretch", key="tab4_ha_bsfc_crosscheck")
             st.caption(t("ha_bsfc_crosscheck_note"))
         else:
             st.info(t("not_enough_data"))
@@ -3337,7 +3347,7 @@ def render_tab5(db_path, file_version):
         df_display = df.rename(
             columns={"date": t("col_date"), "mileage": t("col_mileage"), "description": t("col_description")}
         )
-        st.dataframe(df_display, use_container_width=True, hide_index=True)
+        st.dataframe(df_display, width="stretch", hide_index=True)
     else:
         st.info(t("maintenance_empty"))
 
@@ -3466,10 +3476,13 @@ def main():
     with st.spinner(t("downloading_db")):
         try:
             db_path = download_database()
-        except RuntimeError:
+        except RuntimeError as e:
+            print(f"[main] download_database RuntimeError: {e!r}", flush=True)
             db_ok = False
             db_missing = True
         except Exception as e:
+            print("[main] download_database неожиданная ошибка:", flush=True)
+            traceback.print_exc()
             db_ok = False
             db_error_message = str(e)
 
