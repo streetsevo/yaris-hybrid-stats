@@ -60,6 +60,8 @@ import os
 import re
 import shutil
 import sqlite3
+import tempfile
+import threading
 import time
 import traceback
 from datetime import date, datetime, timedelta
@@ -87,6 +89,14 @@ except ImportError:
 # --- Источник основной базы данных: Google Диск ---
 GDRIVE_FOLDER_ID = "1euBXP38wifqzXUSv0RkySvbtmoUQ_HTL"
 LOCAL_DB_FOLDER_PATH = "/tmp/hybridassistant_folder"
+DB_REFRESH_COOLDOWN_SECONDS = 40  # скачивание занимает ~30 сек — не даём кликать чаще
+
+# Скачивание занимает ~30 секунд. Если пользователь нажмёт "Обновить базу
+# данных" ещё раз, не дождавшись первого запроса, второй вызов раньше
+# начинал удалять и перезаписывать ТУ ЖЕ папку, пока первый ещё писал в
+# неё файлы — отсюда зависания и битые/неполные скачивания. Блокировка
+# ниже гарантирует, что параллельные вызовы выполняются строго по одному.
+_download_lock = threading.Lock()
 DB_CACHE_TTL_SECONDS = 30 * 60  # 30 минут между автоматическими обновлениями
 
 MAINTENANCE_FILE = "maintenance.json"
@@ -230,7 +240,8 @@ TR = {
         "language_label": "Язык / Language",
         "refresh_db_button": "🔄 Обновить базу данных",
         "db_last_loaded": "База данных загружена: {timestamp}",
-        "downloading_db": "Загрузка базы данных с Google Диска…",
+        "downloading_db": "Загрузка базы данных с Google Диска (обычно занимает 20-30 секунд, не закрывайте страницу)…",
+        "refresh_in_progress_warning": "⏳ Обновление уже запущено — подождите примерно 30 секунд, повторное нажатие сейчас только всё замедлит.",
         "db_missing": "⚠️ Не удалось скачать базу данных с Google Диска. Проверьте, что доступ к файлу открыт по ссылке (\"Все, у кого есть ссылка\" → \"Читатель\").",
         "db_error": "⚠️ Не удалось прочитать базу данных: {error}",
         "no_trip_data": "Нет данных о поездках для отображения.",
@@ -510,7 +521,8 @@ TR = {
         "language_label": "Język / Язык",
         "refresh_db_button": "🔄 Odśwież bazę danych",
         "db_last_loaded": "Baza danych wczytana: {timestamp}",
-        "downloading_db": "Pobieranie bazy danych z Google Drive…",
+        "downloading_db": "Pobieranie bazy danych z Google Drive (zwykle trwa 20-30 sekund, nie zamykaj strony)…",
+        "refresh_in_progress_warning": "⏳ Odświeżanie już trwa — poczekaj około 30 sekund, ponowne kliknięcie teraz tylko to spowolni.",
         "db_missing": "⚠️ Nie udało się pobrać bazy danych z Google Drive. Sprawdź, czy dostęp do pliku jest ustawiony jako \"Każdy, kto ma link\" → \"Czytelnik\".",
         "db_error": "⚠️ Nie udało się odczytać bazy danych: {error}",
         "no_trip_data": "Brak danych o przejazdach do wyświetlenia.",
@@ -799,53 +811,77 @@ def download_database() -> str:
     повторной загрузке нового экспорта в тот же файл на Google Диске
     его внутренний ID иногда меняется — скачивание по ID файла тогда
     продолжает получать старую версию. Скачивание всей папки и выбор
-    самого подходящего .db файла внутри неё устойчиво к этому."""
-    folder_path = LOCAL_DB_FOLDER_PATH
-    if os.path.exists(folder_path):
-        shutil.rmtree(folder_path, ignore_errors=True)
-    os.makedirs(folder_path, exist_ok=True)
+    самого подходящего .db файла внутри неё устойчиво к этому.
 
-    print(f"[download_database] начинаю скачивание папки {GDRIVE_FOLDER_ID} -> {folder_path}", flush=True)
-    t0 = time.time()
-    try:
-        gdown.download_folder(id=GDRIVE_FOLDER_ID, output=folder_path, quiet=True, use_cookies=False)
-    except Exception as e:
-        print(f"[download_database] gdown.download_folder упал за {time.time() - t0:.1f} сек: {e!r}", flush=True)
-        raise
-    print(f"[download_database] gdown.download_folder завершился за {time.time() - t0:.1f} сек", flush=True)
+    Скачивание идёт в ОТДЕЛЬНУЮ временную папку и переключается на
+    неё одним атомарным os.rename только после успешного завершения —
+    это защищает от ситуации, когда повторный клик "Обновить базу
+    данных" запускает второе скачивание, пока первое ещё не закончило
+    писать файлы в общую папку (раньше это приводило к зависанию)."""
+    with _download_lock:
+        temp_dir = tempfile.mkdtemp(prefix="hybridassistant_dl_", dir="/tmp")
+        try:
+            print(f"[download_database] начинаю скачивание папки {GDRIVE_FOLDER_ID} -> {temp_dir}", flush=True)
+            t0 = time.time()
+            try:
+                gdown.download_folder(id=GDRIVE_FOLDER_ID, output=temp_dir, quiet=True, use_cookies=False)
+            except Exception as e:
+                print(f"[download_database] gdown.download_folder упал за {time.time() - t0:.1f} сек: {e!r}", flush=True)
+                raise
+            print(f"[download_database] gdown.download_folder завершился за {time.time() - t0:.1f} сек", flush=True)
 
-    db_candidates = []
-    for root, _dirs, files in os.walk(folder_path):
-        for fname in files:
-            if fname.lower().endswith(".db"):
-                db_candidates.append(os.path.join(root, fname))
+            db_candidates = []
+            for root, _dirs, files in os.walk(temp_dir):
+                for fname in files:
+                    if fname.lower().endswith(".db"):
+                        db_candidates.append(os.path.join(root, fname))
 
-    print(f"[download_database] найдено файлов .db: {len(db_candidates)}: {db_candidates}", flush=True)
+            print(f"[download_database] найдено файлов .db: {len(db_candidates)}: {db_candidates}", flush=True)
 
-    if not db_candidates:
-        raise RuntimeError(
-            "В папке на Google Диске не найден файл базы данных (.db). "
-            "Проверьте, что доступ к папке открыт по ссылке и файл действительно там лежит."
-        )
+            if not db_candidates:
+                raise RuntimeError(
+                    "В папке на Google Диске не найден файл базы данных (.db). "
+                    "Проверьте, что доступ к папке открыт по ссылке и файл действительно там лежит."
+                )
 
-    # Если в папке несколько .db-файлов: сначала предпочитаем файл с
-    # обычным именем hybridassistant*.db, а среди подходящих кандидатов
-    # берём самый крупный по размеру — на практике база растёт со
-    # временем, поэтому самый большой файл почти всегда самый полный/свежий
-    # экспорт. Чтобы не гадать, лучше держать в папке только один .db файл.
-    named = [c for c in db_candidates if os.path.basename(c).lower().startswith("hybridassistant")]
-    pool = named if named else db_candidates
-    output_path = max(pool, key=os.path.getsize)
+            # Если в папке несколько .db-файлов: сначала предпочитаем файл с
+            # обычным именем hybridassistant*.db, а среди подходящих кандидатов
+            # берём самый крупный по размеру — на практике база растёт со
+            # временем, поэтому самый большой файл почти всегда самый полный/свежий
+            # экспорт. Чтобы не гадать, лучше держать в папке только один .db файл.
+            named = [c for c in db_candidates if os.path.basename(c).lower().startswith("hybridassistant")]
+            pool = named if named else db_candidates
+            chosen_temp_path = max(pool, key=os.path.getsize)
 
-    if os.path.getsize(output_path) == 0:
-        raise RuntimeError("Найденный файл базы данных пуст.")
-    with open(output_path, "rb") as f:
-        header = f.read(16)
-    if not header.startswith(b"SQLite format 3"):
-        raise RuntimeError(
-            "Найденный файл не является базой SQLite — проверьте содержимое папки на Google Диске."
-        )
-    return output_path
+            if os.path.getsize(chosen_temp_path) == 0:
+                raise RuntimeError("Найденный файл базы данных пуст.")
+            with open(chosen_temp_path, "rb") as f:
+                header = f.read(16)
+            if not header.startswith(b"SQLite format 3"):
+                raise RuntimeError(
+                    "Найденный файл не является базой SQLite — проверьте содержимое папки на Google Диске."
+                )
+
+            # Атомарно подменяем общую папку на только что скачанную. os.rename
+            # на одной файловой системе (весь /tmp — одна ФС) — атомарная
+            # операция, поэтому читатели никогда не увидят наполовину
+            # скачанную/удалённую папку.
+            relative_db_path = os.path.relpath(chosen_temp_path, temp_dir)
+            final_dir = LOCAL_DB_FOLDER_PATH
+            stale_dir = None
+            if os.path.exists(final_dir):
+                stale_dir = f"{final_dir}_stale_{int(time.time() * 1000)}"
+                os.rename(final_dir, stale_dir)
+            os.rename(temp_dir, final_dir)
+            if stale_dir:
+                shutil.rmtree(stale_dir, ignore_errors=True)
+
+            final_db_path = os.path.join(final_dir, relative_db_path)
+            print(f"[download_database] готово, используется файл: {final_db_path}", flush=True)
+            return final_db_path
+        except Exception:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            raise
 
 
 # ============================================================
@@ -1693,8 +1729,13 @@ def render_sidebar():
 
     st.sidebar.divider()
     if st.sidebar.button(t("refresh_db_button"), width="stretch"):
-        download_database.clear()
-        st.rerun()
+        last_refresh = st.session_state.get("db_refresh_triggered_at", 0.0)
+        if time.time() - last_refresh < DB_REFRESH_COOLDOWN_SECONDS:
+            st.sidebar.warning(t("refresh_in_progress_warning"))
+        else:
+            st.session_state["db_refresh_triggered_at"] = time.time()
+            download_database.clear()
+            st.rerun()
 
 
 _MAP_PARAM_COLORS = {
