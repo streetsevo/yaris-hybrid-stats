@@ -52,10 +52,12 @@ TRIPFUEL обнуляется в начале каждой поездки и н�
 ==================================================================
 """
 
+import base64
 import hashlib
 import hmac
 import io
 import json
+import math
 import os
 import re
 import shutil
@@ -73,6 +75,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from bs4 import BeautifulSoup
 import pypdf
+import requests
 
 try:
     import google.generativeai as genai
@@ -290,6 +293,27 @@ TR = {
         "fuel_forecast_badge": "🔮 (прогноз)",
         "unit_kmh": "км/ч",
         "unit_l100km": "л/100км",
+        "unit_l": "л",
+        "weather_title": "🌤️ Метеорологические условия поездки",
+        "weather_loading": "Запрашиваю историческую погоду…",
+        "weather_no_gps": "Нет достоверных GPS-координат для этой поездки — без них невозможно узнать, какая была погода именно в том месте.",
+        "weather_no_time": "Не удалось определить время старта поездки.",
+        "weather_unavailable": "⚠️ Не удалось получить данные о погоде (сервис Open-Meteo недоступен или для этой даты нет данных).",
+        "weather_air_temp": "Температура воздуха",
+        "weather_condition": "Осадки",
+        "weather_wind": "Ветер (откуда)",
+        "weather_road_temp": "Температура асфальта",
+        "weather_road_temp_help": "Расчётная оценка, а не измерение: асфальт нагревается солнцем сильнее воздуха и остывает ночью ниже него. Реальное значение зависит ещё от цвета и возраста покрытия, ветра и влажности.",
+        "weather_precip": "Осадки за час: {mm} мм.",
+        "weather_cold_warning": "❄️ Повышенный расход из-за прогрева ДВС и салона: при температуре ниже +5 °C гибрид дольше держит двигатель включённым для прогрева, а батарея отдаёт меньше мощности.",
+        "weather_headwind": "🌬️ Встречный ветер ~{speed} км/ч — аэродинамическое сопротивление выше примерно на {pct}%. Это прирост именно аэродинамической составляющей, а не всего расхода топлива.",
+        "weather_headwind_slow": "🌬️ Встречный ветер ~{speed} км/ч. На такой средней скорости аэродинамика почти не влияет на расход.",
+        "weather_tailwind": "🍃 Попутный ветер ~{speed} км/ч — аэродинамическое сопротивление ниже обычного.",
+        "weather_source_note": "Источник погоды: Open-Meteo (историческая реанализация) по координатам старта поездки.",
+        "elevation_profile_title": "⛰️ Профиль высот (рельеф маршрута)",
+        "elevation_no_data": "Нет данных о высоте для этой поездки.",
+        "elevation_flat": "Высота на всём маршруте не менялась — либо участок действительно ровный, либо GPS писал высоту с шагом в целые метры.",
+        "unit_price_per_l": "zł/л",
         "unit_rpm": "об/мин",
         "unit_nm": "Нм",
         "fuel_forecast_help": "Оценка ЭБУ по длительности впрыска (данные Hybrid Assistant) — не прямое измерение топлива.",
@@ -519,6 +543,26 @@ TR = {
         "col_date": "Дата",
         "col_mileage": "Пробег (км)",
         "col_description": "Что сделано",
+        "unit_km": "км",
+        "maintenance_click_hint": "Нажмите на запись, чтобы увидеть подробности.",
+        "part_details": "Детали запчасти / расходника",
+        "part_details_optional": "необязательно, но помогает при следующем ТО",
+        "part_field": "Параметр",
+        "part_value": "Значение",
+        "part_manufacturer": "Производитель",
+        "part_manufacturer_ph": "напр. Toyota, Bosch, Mann",
+        "part_name": "Точное название",
+        "part_name_ph": "напр. Toyota Genuine Motor Oil",
+        "part_spec": "Спецификация / вязкость",
+        "part_spec_ph": "напр. 0W-16, ATF WS, DOT 4",
+        "part_quantity": "Количество",
+        "part_quantity_ph": "напр. 3.9 л или 4 шт.",
+        "part_price": "Цена",
+        "part_price_ph": "напр. 240 zł",
+        "attach_invoice_photo": "Приложить к записи загруженное фото фактуры",
+        "invoice_photo_caption": "Фактура",
+        "invoice_photo_locked": "🔒 Фото фактуры скрыто. Введите код доступа (тот же, что для карт), чтобы увидеть его — на фактуре могут быть личные данные.",
+        "invoice_photo_broken": "⚠️ Не удалось показать сохранённое фото фактуры.",
         "maintenance_status_title": "Статус регламентных работ",
         "maintenance_status_overdue": "🔴 Просрочено",
         "maintenance_status_soon": "🟡 Скоро",
@@ -539,6 +583,12 @@ TR = {
         "form_description": "Описание выполненных работ",
         "save_button": "💾 Сохранить запись",
         "save_success": "✅ Запись успешно сохранена!",
+        "save_success_drive": "✅ Запись сохранена и синхронизирована с Google Диском — она не пропадёт при перезапуске приложения.",
+        "save_success_local_only": "⚠️ Запись сохранена только во временной копии этого контейнера и БУДЕТ ПОТЕРЯНА при перезапуске приложения. Чтобы записи сохранялись навсегда, настройте сервисный аккаунт Google (см. подсказку выше).",
+        "save_failed": "❌ Не удалось сохранить запись ни на Google Диск, ни локально.",
+        "storage_mode_drive": "☁️ Журнал хранится в папке на Google Диске — записи переживают перезапуски приложения.",
+        "storage_mode_drive_readonly": "⚠️ Журнал читается с Google Диска, но записывать туда приложение не может: не настроен сервисный аккаунт. Новые записи сохранятся только временно и пропадут при перезапуске. Как настроить: создайте сервисный аккаунт Google Cloud, дайте его email право «Редактор» на папку с базой, и вставьте его JSON-ключ в Secrets приложения под именем [gcp_service_account].",
+        "storage_mode_local": "⚠️ Журнал хранится только во временной памяти контейнера и пропадёт при перезапуске приложения. Чтобы записи сохранялись навсегда, создайте сервисный аккаунт Google Cloud, дайте его email право «Редактор» на папку с базой на Google Диске и вставьте его JSON-ключ в Secrets приложения под именем [gcp_service_account].",
         "save_fill_all": "⚠️ Заполните все поля перед сохранением.",
         "invoice_upload_label": "📷 Сфотографируйте фактуру/чек — данные подставятся автоматически",
         "invoice_section_title": "📷 Автоматическое распознавание фактуры",
@@ -606,6 +656,27 @@ TR = {
         "fuel_forecast_badge": "🔮 (prognoza)",
         "unit_kmh": "km/h",
         "unit_l100km": "l/100km",
+        "unit_l": "l",
+        "weather_title": "🌤️ Warunki meteorologiczne przejazdu",
+        "weather_loading": "Pobieram dane historyczne o pogodzie…",
+        "weather_no_gps": "Brak wiarygodnych współrzędnych GPS dla tego przejazdu — bez nich nie da się ustalić, jaka była pogoda dokładnie w tym miejscu.",
+        "weather_no_time": "Nie udało się ustalić czasu startu przejazdu.",
+        "weather_unavailable": "⚠️ Nie udało się pobrać danych o pogodzie (serwis Open-Meteo niedostępny lub brak danych dla tej daty).",
+        "weather_air_temp": "Temperatura powietrza",
+        "weather_condition": "Opady",
+        "weather_wind": "Wiatr (skąd)",
+        "weather_road_temp": "Temperatura asfaltu",
+        "weather_road_temp_help": "Szacunek obliczeniowy, a nie pomiar: asfalt nagrzewa się od słońca mocniej niż powietrze, a nocą wychładza się poniżej jego temperatury. Rzeczywista wartość zależy też od koloru i wieku nawierzchni, wiatru i wilgotności.",
+        "weather_precip": "Opady w ciągu godziny: {mm} mm.",
+        "weather_cold_warning": "❄️ Zwiększone spalanie z powodu rozgrzewania silnika i kabiny: przy temperaturze poniżej +5 °C hybryda dłużej utrzymuje silnik spalinowy, a bateria oddaje mniej mocy.",
+        "weather_headwind": "🌬️ Wiatr czołowy ~{speed} km/h — opór aerodynamiczny wyższy o około {pct}%. To przyrost samej składowej aerodynamicznej, a nie całego zużycia paliwa.",
+        "weather_headwind_slow": "🌬️ Wiatr czołowy ~{speed} km/h. Przy tej średniej prędkości aerodynamika prawie nie wpływa na spalanie.",
+        "weather_tailwind": "🍃 Wiatr tylny ~{speed} km/h — opór aerodynamiczny niższy niż zwykle.",
+        "weather_source_note": "Źródło pogody: Open-Meteo (historyczna reanaliza) dla współrzędnych startu przejazdu.",
+        "elevation_profile_title": "⛰️ Profil wysokości (ukształtowanie trasy)",
+        "elevation_no_data": "Brak danych o wysokości dla tego przejazdu.",
+        "elevation_flat": "Wysokość nie zmieniała się na całej trasie — albo odcinek jest rzeczywiście płaski, albo GPS zapisywał wysokość z dokładnością do pełnych metrów.",
+        "unit_price_per_l": "zł/l",
         "unit_rpm": "obr/min",
         "unit_nm": "Nm",
         "fuel_forecast_help": "Szacunek sterownika na podstawie czasu wtrysku (dane Hybrid Assistant) — nie jest to bezpośredni pomiar paliwa.",
@@ -829,6 +900,26 @@ TR = {
         "col_date": "Data",
         "col_mileage": "Przebieg (km)",
         "col_description": "Zakres prac",
+        "unit_km": "km",
+        "maintenance_click_hint": "Kliknij wpis, aby zobaczyć szczegóły.",
+        "part_details": "Szczegóły części / materiału eksploatacyjnego",
+        "part_details_optional": "opcjonalnie, ale pomaga przy kolejnym przeglądzie",
+        "part_field": "Parametr",
+        "part_value": "Wartość",
+        "part_manufacturer": "Producent",
+        "part_manufacturer_ph": "np. Toyota, Bosch, Mann",
+        "part_name": "Dokładna nazwa",
+        "part_name_ph": "np. Toyota Genuine Motor Oil",
+        "part_spec": "Specyfikacja / lepkość",
+        "part_spec_ph": "np. 0W-16, ATF WS, DOT 4",
+        "part_quantity": "Ilość",
+        "part_quantity_ph": "np. 3.9 l lub 4 szt.",
+        "part_price": "Cena",
+        "part_price_ph": "np. 240 zł",
+        "attach_invoice_photo": "Dołącz do wpisu wgrane zdjęcie faktury",
+        "invoice_photo_caption": "Faktura",
+        "invoice_photo_locked": "🔒 Zdjęcie faktury ukryte. Wprowadź kod dostępu (ten sam co do map), aby je zobaczyć — na fakturze mogą być dane osobowe.",
+        "invoice_photo_broken": "⚠️ Nie udało się wyświetlić zapisanego zdjęcia faktury.",
         "maintenance_status_title": "Status przeglądów okresowych",
         "maintenance_status_overdue": "🔴 Przeterminowane",
         "maintenance_status_soon": "🟡 Wkrótce",
@@ -849,6 +940,12 @@ TR = {
         "form_description": "Opis wykonanych prac",
         "save_button": "💾 Zapisz wpis",
         "save_success": "✅ Wpis został zapisany!",
+        "save_success_drive": "✅ Wpis zapisany i zsynchronizowany z Google Drive — nie zniknie po restarcie aplikacji.",
+        "save_success_local_only": "⚠️ Wpis zapisany tylko w tymczasowej kopii tego kontenera i ZOSTANIE UTRACONY po restarcie aplikacji. Aby wpisy zapisywały się na stałe, skonfiguruj konto serwisowe Google (patrz wskazówka powyżej).",
+        "save_failed": "❌ Nie udało się zapisać wpisu ani na Google Drive, ani lokalnie.",
+        "storage_mode_drive": "☁️ Dziennik przechowywany jest w folderze na Google Drive — wpisy przetrwają restarty aplikacji.",
+        "storage_mode_drive_readonly": "⚠️ Dziennik jest odczytywany z Google Drive, ale aplikacja nie może tam zapisywać: brak konta serwisowego. Nowe wpisy zapiszą się tylko tymczasowo i znikną po restarcie. Jak skonfigurować: utwórz konto serwisowe Google Cloud, nadaj jego adresowi e-mail uprawnienie „Edytor” do folderu z bazą i wklej jego klucz JSON do Secrets aplikacji pod nazwą [gcp_service_account].",
+        "storage_mode_local": "⚠️ Dziennik przechowywany jest tylko w tymczasowej pamięci kontenera i zniknie po restarcie aplikacji. Aby wpisy zapisywały się na stałe, utwórz konto serwisowe Google Cloud, nadaj jego adresowi e-mail uprawnienie „Edytor” do folderu z bazą na Google Drive i wklej jego klucz JSON do Secrets aplikacji pod nazwą [gcp_service_account].",
         "save_fill_all": "⚠️ Uzupełnij wszystkie pola przed zapisaniem.",
         "invoice_upload_label": "📷 Sfotografuj fakturę/paragon — dane zostaną podstawione automatycznie",
         "invoice_section_title": "📷 Automatyczne rozpoznawanie faktury",
@@ -954,19 +1051,35 @@ def inject_responsive_css() -> None:
             padding-left: {block_padding};
             padding-right: {block_padding};
         }}
-        [data-testid="stMetricValue"] {{
+        /* Streamlit по умолчанию обрезает длинные подписи и значения
+           метрик многоточием ("Zatank...", "18...."). На узком экране
+           это делает их бесполезными, поэтому разрешаем перенос на
+           следующую строку вместо обрезки. */
+        [data-testid="stMetricValue"],
+        [data-testid="stMetricValue"] * {{
             font-size: {metric_value_size};
-            line-height: 1.2;
+            line-height: 1.25;
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            overflow-wrap: anywhere;
         }}
-        [data-testid="stMetricLabel"] {{
+        [data-testid="stMetricLabel"],
+        [data-testid="stMetricLabel"] * {{
             font-size: 0.8rem;
             opacity: 0.85;
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            overflow-wrap: anywhere;
+            line-height: 1.25;
         }}
         [data-testid="stMetric"] {{
             background: rgba(140, 160, 200, 0.07);
             border: 1px solid rgba(140, 160, 200, 0.18);
             border-radius: 10px;
             padding: 0.55rem 0.7rem;
+            height: 100%;
         }}
         .stTabs [data-baseweb="tab-list"] {{
             gap: 0.15rem;
@@ -995,12 +1108,21 @@ def inject_responsive_css() -> None:
                 min-width: calc(50% - 0.4rem) !important;
                 flex: 1 1 calc(50% - 0.4rem) !important;
             }}
+            /* Вложенные колонки (колонка внутри колонки) на телефоне
+               ужимались бы до четверти экрана — там подпись уже не
+               помещается ни при каком переносе. Разворачиваем их на всю
+               ширину друг под другом. */
+            [data-testid="stColumn"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {{
+                min-width: 100% !important;
+                flex: 1 1 100% !important;
+            }}
             .block-container {{
                 padding-left: 0.6rem;
                 padding-right: 0.6rem;
             }}
-            [data-testid="stMetricValue"] {{
-                font-size: 1.35rem;
+            [data-testid="stMetricValue"],
+            [data-testid="stMetricValue"] * {{
+                font-size: 1.3rem;
             }}
         }}
         </style>
@@ -1559,6 +1681,166 @@ def get_current_mileage(db_path: str, file_version: float) -> "float | None":
 
 
 # ============================================================
+# ПОГОДА В МОМЕНТ ПОЕЗДКИ (Open-Meteo, без ключа)
+# ============================================================
+# Погода берётся по координатам старта поездки и её времени. Open-Meteo
+# отдаёт исторические данные бесплатно и без регистрации.
+# Есть нюанс: архив ERA5 отстаёт примерно на 5 дней, поэтому для свежих
+# поездок сначала пробуем обычный forecast-эндпоинт с past_days (он
+# хранит до 92 дней назад), и только потом архивный.
+
+_OPEN_METEO_ARCHIVE = "https://archive-api.open-meteo.com/v1/archive"
+_OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast"
+_WEATHER_HOURLY_VARS = (
+    "temperature_2m,precipitation,rain,snowfall,weather_code,"
+    "wind_speed_10m,wind_direction_10m,shortwave_radiation,cloud_cover"
+)
+
+# Коды погоды WMO -> понятная человеку категория.
+_WMO_GROUPS = [
+    ((0,), "clear"),
+    ((1, 2, 3), "cloudy"),
+    ((45, 48), "fog"),
+    ((51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82), "rain"),
+    ((71, 73, 75, 77, 85, 86), "snow"),
+    ((95, 96, 99), "thunder"),
+]
+
+
+def _wmo_group(code) -> str:
+    if code is None or pd.isna(code):
+        return "unknown"
+    code = int(code)
+    for codes, group in _WMO_GROUPS:
+        if code in codes:
+            return group
+    return "unknown"
+
+
+@st.cache_data(show_spinner=False, ttl=7 * 24 * 3600)
+def fetch_trip_weather(lat: float, lon: float, day: str, hour_index: int) -> dict:
+    """Возвращает погоду на конкретный час в конкретной точке.
+    Пустой словарь означает, что данных получить не удалось — вызывающий
+    код должен это корректно показать, а не выдумывать значения."""
+    params = {
+        "latitude": round(lat, 4),
+        "longitude": round(lon, 4),
+        "start_date": day,
+        "end_date": day,
+        "hourly": _WEATHER_HOURLY_VARS,
+        "timezone": LOCAL_TIMEZONE,
+    }
+    for url in (_OPEN_METEO_FORECAST, _OPEN_METEO_ARCHIVE):
+        try:
+            resp = requests.get(url, params=params, timeout=12)
+            if resp.status_code != 200:
+                continue
+            hourly = (resp.json() or {}).get("hourly") or {}
+            times = hourly.get("time") or []
+            if not times:
+                continue
+            idx = min(max(hour_index, 0), len(times) - 1)
+
+            def val(key):
+                seq = hourly.get(key) or []
+                return seq[idx] if idx < len(seq) else None
+
+            result = {
+                "time": times[idx],
+                "temperature": val("temperature_2m"),
+                "precipitation": val("precipitation"),
+                "rain": val("rain"),
+                "snowfall": val("snowfall"),
+                "weather_code": val("weather_code"),
+                "wind_speed": val("wind_speed_10m"),
+                "wind_direction": val("wind_direction_10m"),
+                "solar_radiation": val("shortwave_radiation"),
+                "cloud_cover": val("cloud_cover"),
+                "source": "forecast" if url == _OPEN_METEO_FORECAST else "archive",
+            }
+            # Пустой ответ (все None) считаем неудачей и пробуем следующий источник.
+            if result["temperature"] is not None:
+                return result
+        except Exception:
+            continue
+    return {}
+
+
+def estimate_road_surface_temp(air_temp: float, solar_radiation: float) -> "float | None":
+    """ОЦЕНКА температуры асфальта. Это упрощённая инженерная модель, а
+    НЕ измерение: асфальт нагревается солнцем сильнее воздуха примерно
+    пропорционально приходящей солнечной радиации, а ночью, наоборот,
+    остывает излучением на 1-2 градуса ниже воздуха.
+    Коэффициент 0.025 °C на Вт/м² даёт привычные +20 °C при ярком
+    летнем солнце (~800 Вт/м²). Реальная температура зависит ещё от
+    цвета и возраста покрытия, ветра и влажности, поэтому значение
+    следует считать ориентировочным."""
+    if air_temp is None or pd.isna(air_temp):
+        return None
+    radiation = 0.0 if (solar_radiation is None or pd.isna(solar_radiation)) else float(solar_radiation)
+    if radiation <= 5:  # ночь или плотная облачность
+        return round(float(air_temp) - 1.5, 1)
+    return round(float(air_temp) + 0.025 * radiation, 1)
+
+
+def _bearing_deg(lat1, lon1, lat2, lon2) -> "float | None":
+    """Азимут движения из точки 1 в точку 2, в градусах от севера."""
+    try:
+        lat1, lon1, lat2, lon2 = map(math.radians, (lat1, lon1, lat2, lon2))
+    except (TypeError, ValueError):
+        return None
+    dlon = lon2 - lon1
+    x = math.sin(dlon) * math.cos(lat2)
+    y = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
+    return (math.degrees(math.atan2(x, y)) + 360) % 360
+
+
+def estimate_headwind(wind_speed_kmh, wind_from_deg, travel_bearing_deg) -> "float | None":
+    """Продольная составляющая ветра, км/ч. Положительное значение —
+    встречный ветер, отрицательное — попутный. В метеорологии направление
+    ветра указывается ОТКУДА он дует, что здесь и учитывается."""
+    if any(v is None or pd.isna(v) for v in (wind_speed_kmh, wind_from_deg, travel_bearing_deg)):
+        return None
+    angle = math.radians(float(wind_from_deg) - float(travel_bearing_deg))
+    return round(float(wind_speed_kmh) * math.cos(angle), 1)
+
+
+def estimate_aero_penalty_pct(avg_speed_kmh, headwind_kmh) -> "float | None":
+    """Насколько встречный ветер увеличивает аэродинамическое
+    сопротивление. Сопротивление растёт как квадрат скорости набегающего
+    потока, поэтому считаем ((V+W)^2 - V^2) / V^2.
+    ВАЖНО: это прирост именно аэродинамической составляющей, а не общего
+    расхода топлива — на городских скоростях аэродинамика составляет лишь
+    часть потерь, поэтому реальный прирост расхода будет заметно меньше."""
+    if any(v is None or pd.isna(v) for v in (avg_speed_kmh, headwind_kmh)):
+        return None
+    v = float(avg_speed_kmh)
+    if v < 15:  # на малых скоростях аэродинамика почти не играет роли
+        return None
+    relative = v + float(headwind_kmh)
+    if relative <= 0:
+        return None
+    return round((relative ** 2 - v ** 2) / (v ** 2) * 100.0, 1)
+
+
+def _first_valid_gps(trip_log: pd.DataFrame) -> "tuple | None":
+    """Первая достоверная координата поездки. Нулевые точки — это
+    отсутствие GPS-фикса, а не место на нулевом острове."""
+    if trip_log.empty or "GPS_LAT" not in trip_log.columns:
+        return None
+    valid = trip_log.dropna(subset=["GPS_LAT", "GPS_LON"])
+    valid = valid[(valid["GPS_LAT"] != 0) | (valid["GPS_LON"] != 0)]
+    if valid.empty:
+        return None
+    first = valid.iloc[0]
+    last = valid.iloc[-1]
+    return (
+        float(first["GPS_LAT"]), float(first["GPS_LON"]),
+        float(last["GPS_LAT"]), float(last["GPS_LON"]),
+    )
+
+
+# ============================================================
 # ЗАЩИТА ОТ ПОДБОРА: ПАРОЛЬ ТО + КОД ДОСТУПА К КАРТАМ
 # ============================================================
 
@@ -1646,23 +1928,202 @@ def render_maps_locked_placeholder() -> None:
 # ЖУРНАЛ ТО (maintenance.json)
 # ============================================================
 
-def load_maintenance() -> list:
-    if not os.path.exists(MAINTENANCE_FILE):
-        with open(MAINTENANCE_FILE, "w", encoding="utf-8") as f:
-            json.dump([], f, ensure_ascii=False, indent=2)
-        return []
+# ============================================================
+# ХРАНЕНИЕ ЖУРНАЛА ТО (Google Диск + локальный запасной вариант)
+# ============================================================
+# Контейнер Streamlit Cloud эфемерный: локальный maintenance.json
+# обнуляется при каждом перезапуске приложения. Поэтому журнал
+# хранится в той же папке Google Диска, что и база данных.
+#
+# ВАЖНО: gdown умеет только СКАЧИВАТЬ. Чтобы записывать файл обратно,
+# нужен Google Drive API с сервисным аккаунтом. Настройка (один раз):
+#   1. В Google Cloud Console создайте сервисный аккаунт и скачайте
+#      его JSON-ключ.
+#   2. Откройте доступ к папке на Google Диске для email этого
+#      сервисного аккаунта с правом "Редактор".
+#   3. Вставьте содержимое ключа в Secrets приложения в виде:
+#        [gcp_service_account]
+#        type = "service_account"
+#        project_id = "..."
+#        private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+#        client_email = "...@....iam.gserviceaccount.com"
+#        ... (остальные поля из JSON)
+#
+# Если сервисный аккаунт не настроен, приложение продолжает работать:
+# журнал читается из скачанной копии папки, но новые записи сохраняются
+# только локально и будут потеряны при перезапуске — о чём честно
+# предупреждает интерфейс.
+
+_DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
+
+
+@st.cache_resource(show_spinner=False)
+def get_drive_service():
+    """Клиент Google Drive API, если настроен сервисный аккаунт."""
     try:
-        with open(MAINTENANCE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return []
+        sa_info = st.secrets.get("gcp_service_account")
+    except Exception:
+        return None
+    if not sa_info:
+        return None
+    try:
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+
+        creds = service_account.Credentials.from_service_account_info(
+            dict(sa_info), scopes=_DRIVE_SCOPES
+        )
+        return build("drive", "v3", credentials=creds, cache_discovery=False)
+    except Exception as e:
+        print(f"[drive] не удалось создать клиент Drive API: {e!r}", flush=True)
+        return None
 
 
-def save_maintenance_record(record: dict) -> None:
+def _find_drive_file_id(service, filename: str) -> "str | None":
+    try:
+        safe_name = filename.replace("'", "\\'")
+        response = (
+            service.files()
+            .list(
+                q=f"'{GDRIVE_FOLDER_ID}' in parents and name='{safe_name}' and trashed=false",
+                fields="files(id, name)",
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+            )
+            .execute()
+        )
+        files = response.get("files", [])
+        return files[0]["id"] if files else None
+    except Exception as e:
+        print(f"[drive] поиск {filename} не удался: {e!r}", flush=True)
+        return None
+
+
+def load_maintenance_from_drive() -> "list | None":
+    """Читает журнал напрямую с Google Диска. None означает, что
+    прочитать не удалось (нет доступа/файла) — это НЕ то же самое, что
+    пустой журнал, поэтому вызывающий код различает эти случаи."""
+    service = get_drive_service()
+    if service is None:
+        return None
+    file_id = _find_drive_file_id(service, MAINTENANCE_FILE)
+    if not file_id:
+        return None
+    try:
+        content = service.files().get_media(fileId=file_id, supportsAllDrives=True).execute()
+        data = json.loads(content.decode("utf-8"))
+        return data if isinstance(data, list) else None
+    except Exception as e:
+        print(f"[drive] чтение журнала не удалось: {e!r}", flush=True)
+        return None
+
+
+def save_maintenance_to_drive(records: list) -> bool:
+    """Записывает журнал на Google Диск. True — успешно."""
+    service = get_drive_service()
+    if service is None:
+        return False
+    try:
+        from googleapiclient.http import MediaInMemoryUpload
+
+        payload = json.dumps(records, ensure_ascii=False, indent=2).encode("utf-8")
+        media = MediaInMemoryUpload(payload, mimetype="application/json", resumable=False)
+        file_id = _find_drive_file_id(service, MAINTENANCE_FILE)
+        if file_id:
+            service.files().update(fileId=file_id, media_body=media, supportsAllDrives=True).execute()
+        else:
+            service.files().create(
+                body={"name": MAINTENANCE_FILE, "parents": [GDRIVE_FOLDER_ID]},
+                media_body=media,
+                fields="id",
+                supportsAllDrives=True,
+            ).execute()
+        return True
+    except Exception as e:
+        print(f"[drive] запись журнала не удалась: {e!r}", flush=True)
+        return False
+
+
+def _load_maintenance_local() -> list:
+    """Локальная копия журнала: сначала рабочая папка, затем — копия,
+    скачанная вместе с базой из папки Google Диска."""
+    for path in (MAINTENANCE_FILE, os.path.join(LOCAL_DB_FOLDER_PATH, MAINTENANCE_FILE)):
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    return data
+            except (json.JSONDecodeError, OSError):
+                continue
+    return []
+
+
+def get_maintenance_storage_mode() -> str:
+    """Как сейчас хранится журнал: 'drive' (надёжно, с синхронизацией),
+    'drive_readonly' (файл виден с Диска, но записывать некуда) или
+    'local' (только эфемерная копия в контейнере)."""
+    if get_drive_service() is not None:
+        return "drive"
+    if os.path.exists(os.path.join(LOCAL_DB_FOLDER_PATH, MAINTENANCE_FILE)):
+        return "drive_readonly"
+    return "local"
+
+
+def load_maintenance() -> list:
+    """Журнал ТО. Приоритет у Google Диска — он переживает перезапуски
+    контейнера, в отличие от локального файла."""
+    if st.session_state.get("maintenance_cache_valid") and "maintenance_cache" in st.session_state:
+        return st.session_state["maintenance_cache"]
+
+    records = load_maintenance_from_drive()
+    if records is None:
+        records = _load_maintenance_local()
+
+    st.session_state["maintenance_cache"] = records
+    st.session_state["maintenance_cache_valid"] = True
+    return records
+
+
+def _make_invoice_thumbnail(raw_bytes: bytes, max_side: int = 1400, quality: int = 78) -> "str | None":
+    """Уменьшенная JPEG-копия фактуры в base64. Фото с телефона весит
+    несколько мегабайт, а журнал ТО читается целиком при каждом
+    открытии вкладки — хранить оригиналы там нельзя."""
+    try:
+        from PIL import Image
+
+        img = Image.open(io.BytesIO(raw_bytes))
+        img = img.convert("RGB")
+        img.thumbnail((max_side, max_side))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+        return base64.b64encode(buf.getvalue()).decode("ascii")
+    except Exception:
+        return None
+
+
+def save_maintenance_record(record: dict) -> dict:
+    """Добавляет запись в журнал. Возвращает результат сохранения, чтобы
+    интерфейс мог честно сказать, попала запись на Google Диск или
+    осталась только во временной копии контейнера."""
     records = load_maintenance()
     records.append(record)
-    with open(MAINTENANCE_FILE, "w", encoding="utf-8") as f:
-        json.dump(records, f, ensure_ascii=False, indent=2)
+
+    # Локальную копию пишем всегда — она страхует на случай, если Диск
+    # временно недоступен, и служит источником в пределах сессии.
+    local_ok = True
+    try:
+        with open(MAINTENANCE_FILE, "w", encoding="utf-8") as f:
+            json.dump(records, f, ensure_ascii=False, indent=2)
+    except OSError as e:
+        local_ok = False
+        print(f"[maintenance] локальная запись не удалась: {e!r}", flush=True)
+
+    drive_ok = save_maintenance_to_drive(records)
+
+    st.session_state["maintenance_cache"] = records
+    st.session_state["maintenance_cache_valid"] = True
+    return {"drive": drive_ok, "local": local_ok, "mode": get_maintenance_storage_mode()}
 
 
 def _find_last_matching_record(records: list, keywords: list):
@@ -2193,8 +2654,8 @@ def _render_fuel_log_section(fuel_df: pd.DataFrame) -> None:
             days_ago = (today - last["date"]).days
             st.metric(t("fuel_last_refuel_date"), last["date"].strftime("%Y-%m-%d"))
             c1, c2 = st.columns(2)
-            c1.metric(t("fuel_liters"), f"{last['liters']:.2f} л")
-            c2.metric(t("fuel_price"), f"{last['price']:.2f} zł/л")
+            c1.metric(t("fuel_liters"), f"{last['liters']:.2f} {t('unit_l')}")
+            c2.metric(t("fuel_price"), f"{last['price']:.2f} {t('unit_price_per_l')}")
             st.caption(t("fuel_days_ago").format(days=days_ago))
 
             if ftype == "lpg":
@@ -2247,6 +2708,125 @@ def _render_fuel_log_section(fuel_df: pd.DataFrame) -> None:
     else:
         st.info(t("not_enough_data"))
     st.caption(t("fuel_real_badge_note"))
+
+
+def render_trip_weather_section(trip_row, trip_log: pd.DataFrame) -> None:
+    """Блок метеоусловий поездки + профиль высот."""
+    st.subheader(t("weather_title"))
+
+    coords = _first_valid_gps(trip_log)
+    if coords is None:
+        st.info(t("weather_no_gps"))
+    else:
+        lat, lon, lat_end, lon_end = coords
+        start_dt = trip_log["datetime"].min()
+        if pd.isna(start_dt):
+            st.info(t("weather_no_time"))
+        else:
+            with st.spinner(t("weather_loading")):
+                weather = fetch_trip_weather(
+                    lat, lon, start_dt.strftime("%Y-%m-%d"), int(start_dt.hour)
+                )
+
+            if not weather:
+                st.warning(t("weather_unavailable"))
+            else:
+                air_temp = weather.get("temperature")
+                road_temp = estimate_road_surface_temp(air_temp, weather.get("solar_radiation"))
+                group = _wmo_group(weather.get("weather_code"))
+                lang = st.session_state.get("lang", "pl")
+                condition_label = _WEATHER_CONDITION_LABELS.get(group, {}).get(lang, group)
+
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric(t("weather_air_temp"), f"{air_temp:.1f} °C" if air_temp is not None else "—")
+                c2.metric(t("weather_condition"), condition_label)
+                wind_speed = weather.get("wind_speed")
+                wind_dir = weather.get("wind_direction")
+                wind_text = "—"
+                if wind_speed is not None:
+                    wind_text = f"{wind_speed:.0f} {t('unit_kmh')}"
+                    if wind_dir is not None:
+                        wind_text += f" · {_compass_label(wind_dir, lang)}"
+                c3.metric(t("weather_wind"), wind_text)
+                c4.metric(
+                    f"{t('weather_road_temp')} 🔮",
+                    f"{road_temp:.1f} °C" if road_temp is not None else "—",
+                    help=t("weather_road_temp_help"),
+                )
+
+                precip = weather.get("precipitation")
+                if precip:
+                    st.caption(t("weather_precip").format(mm=f"{precip:.1f}"))
+
+                # --- Влияние на гибридную систему ---
+                if air_temp is not None and air_temp < 5:
+                    st.warning(t("weather_cold_warning"))
+
+                travel_bearing = _bearing_deg(lat, lon, lat_end, lon_end)
+                headwind = estimate_headwind(wind_speed, wind_dir, travel_bearing)
+                if headwind is not None:
+                    avg_speed = pd.to_numeric(trip_log.get("SPEED_OBD"), errors="coerce")
+                    avg_speed = avg_speed[avg_speed > 0].mean() if avg_speed is not None else None
+                    if headwind > 3:
+                        penalty = estimate_aero_penalty_pct(avg_speed, headwind)
+                        if penalty is not None:
+                            st.warning(
+                                t("weather_headwind").format(
+                                    speed=f"{headwind:.0f}", pct=f"{penalty:.0f}"
+                                )
+                            )
+                        else:
+                            st.info(t("weather_headwind_slow").format(speed=f"{headwind:.0f}"))
+                    elif headwind < -3:
+                        st.success(t("weather_tailwind").format(speed=f"{abs(headwind):.0f}"))
+                st.caption(t("weather_source_note"))
+
+    # --- Профиль высот ---
+    st.markdown(f"**{t('elevation_profile_title')}**")
+    alt = pd.to_numeric(trip_log.get("GPS_ALT"), errors="coerce") if "GPS_ALT" in trip_log.columns else None
+    if alt is None or alt.dropna().empty:
+        st.info(t("elevation_no_data"))
+        return
+
+    profile = pd.DataFrame({"datetime": trip_log["datetime"], "alt": alt}).dropna()
+    if profile["alt"].nunique() <= 1:
+        st.info(t("elevation_flat"))
+        return
+
+    fig = go.Figure(
+        go.Scatter(x=profile["datetime"], y=profile["alt"], mode="lines", fill="tozeroy",
+                   line=dict(color="#8D6E63"), name=t("rep_altitude"))
+    )
+    fig.update_layout(
+        height=rsp_height(280),
+        yaxis_title=t("rep_altitude"),
+        yaxis=dict(range=[profile["alt"].min() - 5, profile["alt"].max() + 5]),
+        margin=dict(l=0, r=0, t=10, b=0),
+    )
+    st.plotly_chart(fig, width="stretch", key="tab1_elevation_profile")
+    st.caption(t("rep_elevation_note"))
+
+
+_WEATHER_CONDITION_LABELS = {
+    "clear": {"ru": "Ясно", "pl": "Bezchmurnie"},
+    "cloudy": {"ru": "Облачно", "pl": "Pochmurno"},
+    "fog": {"ru": "Туман", "pl": "Mgła"},
+    "rain": {"ru": "Дождь", "pl": "Deszcz"},
+    "snow": {"ru": "Снег", "pl": "Śnieg"},
+    "thunder": {"ru": "Гроза", "pl": "Burza"},
+    "unknown": {"ru": "Нет данных", "pl": "Brak danych"},
+}
+
+_COMPASS = {
+    "ru": ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"],
+    "pl": ["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
+}
+
+
+def _compass_label(degrees: float, lang: str) -> str:
+    """Направление ветра словами (откуда дует)."""
+    names = _COMPASS.get(lang, _COMPASS["pl"])
+    return names[int((float(degrees) + 22.5) % 360 // 45)]
 
 
 def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, fuel_df):
@@ -2331,6 +2911,9 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
             mcol3.metric(t("metric_ice_pct"), f"{ice_pct:.0f}%" if ice_pct is not None else "—")
             mcol4.metric(f"{t('metric_fuel_ml')} {t('fuel_forecast_badge')}", f"{sel_row['fuel_ml']:.0f}" if pd.notna(sel_row.get("fuel_ml")) else "—", help=t("fuel_forecast_help"))
             mcol5.metric(t("metric_brake_events"), f"{int(sel_row['brake_events'])}" if pd.notna(sel_row.get("brake_events")) else "—")
+
+            st.divider()
+            render_trip_weather_section(sel_row, trip_log)
         else:
             st.info(t("no_gps_data"))
 
@@ -3993,18 +4576,87 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
     st.caption(t("ha_reports_hvcheck_note"))
 
 
+def render_maintenance_journal(records: list) -> None:
+    """Журнал ТО: каждая запись раскрывается в подробную карточку.
+    Фото фактуры показывается только при разблокированном коде — оно
+    может содержать личные данные (адрес, номер авто, реквизиты)."""
+    if not records:
+        st.info(t("maintenance_empty"))
+        return
+
+    ordered = sorted(records, key=lambda r: (r.get("date") or "", r.get("mileage") or 0), reverse=True)
+    st.caption(t("maintenance_click_hint"))
+
+    for i, rec in enumerate(ordered):
+        mileage = rec.get("mileage")
+        mileage_txt = f"{mileage:,.0f}".replace(",", " ") if isinstance(mileage, (int, float)) else "—"
+        desc = (rec.get("description") or "").strip()
+        short_desc = desc if len(desc) <= 60 else desc[:57] + "…"
+        header = f"📄 {rec.get('date', '—')} · {mileage_txt} {t('unit_km')} · {short_desc}"
+
+        with st.expander(header):
+            c1, c2 = st.columns(2)
+            c1.metric(t("col_date"), rec.get("date") or "—")
+            c2.metric(t("col_mileage"), mileage_txt)
+
+            if desc:
+                st.markdown(f"**{t('col_description')}**")
+                st.write(desc)
+
+            # Подробности о запчасти/расходнике — все поля необязательные,
+            # старые записи их просто не содержат.
+            detail_fields = [
+                ("manufacturer", t("part_manufacturer")),
+                ("product_name", t("part_name")),
+                ("spec", t("part_spec")),
+                ("quantity", t("part_quantity")),
+                ("price", t("part_price")),
+            ]
+            present = [(label, rec.get(key)) for key, label in detail_fields if rec.get(key)]
+            if present:
+                st.markdown(f"**{t('part_details')}**")
+                st.dataframe(
+                    pd.DataFrame({t("part_field"): [p[0] for p in present],
+                                  t("part_value"): [str(p[1]) for p in present]}),
+                    width="stretch", hide_index=True, key=f"maint_details_{i}",
+                )
+
+            photo_b64 = rec.get("invoice_photo_b64")
+            if photo_b64:
+                if maps_are_unlocked():
+                    try:
+                        st.image(base64.b64decode(photo_b64), caption=t("invoice_photo_caption"), width="stretch")
+                    except Exception:
+                        st.caption(t("invoice_photo_broken"))
+                else:
+                    st.info(t("invoice_photo_locked"))
+
+
 def render_tab5(db_path, file_version):
     st.subheader(t("maintenance_title"))
 
-    records = load_maintenance()
-    if records:
-        df = pd.DataFrame(records)
-        df_display = df.rename(
-            columns={"date": t("col_date"), "mileage": t("col_mileage"), "description": t("col_description")}
-        )
-        st.dataframe(df_display, width="stretch", hide_index=True)
+    # Показываем результат последнего сохранения (форма делает st.rerun,
+    # поэтому сообщение нужно пронести через session_state).
+    status = st.session_state.pop("last_save_status", None)
+    if status:
+        kind, _ = status
+        if kind == "drive":
+            st.success(t("save_success_drive"))
+        elif kind == "local_only":
+            st.warning(t("save_success_local_only"))
+        else:
+            st.error(t("save_failed"))
+
+    mode = get_maintenance_storage_mode()
+    if mode == "drive":
+        st.caption(t("storage_mode_drive"))
+    elif mode == "drive_readonly":
+        st.warning(t("storage_mode_drive_readonly"))
     else:
-        st.info(t("maintenance_empty"))
+        st.warning(t("storage_mode_local"))
+
+    records = load_maintenance()
+    render_maintenance_journal(records)
 
     st.divider()
     st.subheader(t("maintenance_status_title"))
@@ -4070,6 +4722,7 @@ def render_tab5(db_path, file_version):
                             uploaded_invoice.getvalue(), uploaded_invoice.type or "image/jpeg"
                         )
                     st.session_state["last_invoice_name"] = uploaded_invoice.name
+                    st.session_state["last_invoice_bytes"] = uploaded_invoice.getvalue()
                     st.session_state["last_invoice_result"] = data
 
                 data = st.session_state.get("last_invoice_result", {})
@@ -4127,23 +4780,59 @@ def render_tab5(db_path, file_version):
         record_date = st.date_input(t("form_date"), value=prefill_date_value)
         record_mileage = st.number_input(t("form_mileage"), min_value=0, step=100, value=int(prefill_odo) if prefill_odo else 0)
         record_description = st.text_area(t("form_description"), value=prefill_desc)
+
+        st.markdown(f"**{t('part_details')}** — {t('part_details_optional')}")
+        p1, p2 = st.columns(2)
+        with p1:
+            part_manufacturer = st.text_input(t("part_manufacturer"), placeholder=t("part_manufacturer_ph"))
+            part_spec = st.text_input(t("part_spec"), placeholder=t("part_spec_ph"))
+            part_price = st.text_input(t("part_price"), placeholder=t("part_price_ph"))
+        with p2:
+            part_name = st.text_input(t("part_name"), placeholder=t("part_name_ph"))
+            part_quantity = st.text_input(t("part_quantity"), placeholder=t("part_quantity_ph"))
+
+        attach_photo = st.checkbox(t("attach_invoice_photo"), value=True)
         submitted = st.form_submit_button(t("save_button"))
 
         if submitted:
             if record_description.strip() == "":
                 st.warning(t("save_fill_all"))
             else:
-                save_maintenance_record(
-                    {
-                        "date": record_date.strftime("%Y-%m-%d"),
-                        "mileage": int(record_mileage),
-                        "description": record_description.strip(),
-                    }
-                )
-                st.session_state.pop("invoice_prefill_date", None)
-                st.session_state.pop("invoice_prefill_odo", None)
-                st.session_state.pop("invoice_prefill_desc", None)
-                st.success(t("save_success"))
+                new_record = {
+                    "date": record_date.strftime("%Y-%m-%d"),
+                    "mileage": int(record_mileage),
+                    "description": record_description.strip(),
+                }
+                for key, value in (
+                    ("manufacturer", part_manufacturer),
+                    ("product_name", part_name),
+                    ("spec", part_spec),
+                    ("quantity", part_quantity),
+                    ("price", part_price),
+                ):
+                    if value and value.strip():
+                        new_record[key] = value.strip()
+
+                # Фото фактуры сохраняем уменьшенной копией: оригинал с
+                # телефона весит несколько мегабайт, а maintenance.json
+                # хранится целиком в памяти при каждом чтении.
+                if attach_photo:
+                    raw_photo = st.session_state.get("last_invoice_bytes")
+                    if raw_photo:
+                        thumb = _make_invoice_thumbnail(raw_photo)
+                        if thumb:
+                            new_record["invoice_photo_b64"] = thumb
+
+                save_result = save_maintenance_record(new_record)
+                for k in ("invoice_prefill_date", "invoice_prefill_odo", "invoice_prefill_desc",
+                          "last_invoice_bytes", "last_invoice_name", "last_invoice_result"):
+                    st.session_state.pop(k, None)
+                if save_result.get("drive"):
+                    st.session_state["last_save_status"] = ("drive", None)
+                elif save_result.get("local"):
+                    st.session_state["last_save_status"] = ("local_only", None)
+                else:
+                    st.session_state["last_save_status"] = ("failed", None)
                 st.rerun()
 
 
