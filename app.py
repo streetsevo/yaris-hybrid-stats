@@ -243,6 +243,9 @@ TR = {
         "language_label": "Язык / Language",
         "refresh_db_button": "🔄 Обновить базу данных",
         "map_style_label": "Стиль карты",
+        "map_stadia_key_found": "🔑 Ключ Stadia найден в Secrets.",
+        "map_stadia_key_missing": "🔑 Ключ Stadia не найден в Secrets. Проверьте имя параметра — оно должно быть ровно stadia_api_key.",
+        "map_stadia_troubleshoot": "Если подложка не загружается даже с ключом — в личном кабинете Stadia добавьте домен приложения (*.streamlit.app) в список разрешённых для вашего проекта: браузерные запросы Stadia проверяет по домену.",
         "db_autorefresh_note": "База обновляется автоматически 3 раза в сутки (каждые 8 часов). Кнопка ниже — если нужно прямо сейчас.",
         "db_last_loaded": "База данных загружена: {timestamp}",
         "downloading_db": "Загрузка базы данных с Google Диска (обычно занимает 20-30 секунд, не закрывайте страницу)…",
@@ -612,6 +615,9 @@ TR = {
         "language_label": "Język / Язык",
         "refresh_db_button": "🔄 Odśwież bazę danych",
         "map_style_label": "Styl mapy",
+        "map_stadia_key_found": "🔑 Klucz Stadia znaleziony w Secrets.",
+        "map_stadia_key_missing": "🔑 Nie znaleziono klucza Stadia w Secrets. Sprawdź nazwę parametru — powinna brzmieć dokładnie stadia_api_key.",
+        "map_stadia_troubleshoot": "Jeśli podkład nie ładuje się nawet z kluczem — w panelu Stadia dodaj domenę aplikacji (*.streamlit.app) do listy dozwolonych dla Twojego projektu: żądania z przeglądarki Stadia weryfikuje po domenie.",
         "db_autorefresh_note": "Baza odświeża się automatycznie 3 razy na dobę (co 8 godzin). Przycisk poniżej — jeśli potrzebujesz od razu.",
         "db_last_loaded": "Baza danych wczytana: {timestamp}",
         "downloading_db": "Pobieranie bazy danych z Google Drive (zwykle trwa 20-30 sekund, nie zamykaj strony)…",
@@ -1977,7 +1983,10 @@ MAP_STYLE_OPTIONS = {
         "label": {"ru": "CartoDB Dark Matter (тёмная)", "pl": "CartoDB Dark Matter (ciemna)"},
     },
     "alidade-smooth-dark": {
-        "raster": "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}@2x.png",
+        # Обычные тайлы 256px, а не @2x: MapLibre внутри Plotly считает
+        # размер тайла равным 256, и retina-версия 512px выравнивается
+        # неправильно. Качество чуть ниже, зато карта действительно видна.
+        "raster": "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png",
         "attribution": "© Stadia Maps © OpenMapTiles © OpenStreetMap contributors",
         "needs_key": True,
         "label": {"ru": "Alidade Smooth Dark", "pl": "Alidade Smooth Dark"},
@@ -1999,6 +2008,44 @@ MAP_STYLE_OPTIONS = {
 
 DEFAULT_MAP_STYLE = "carto-darkmatter"
 
+# Имя секрета могло быть записано по-разному — принимаем несколько
+# распространённых вариантов, чтобы ключ не «терялся» молча.
+_STADIA_SECRET_NAMES = ("stadia_api_key", "STADIA_API_KEY", "stadia_key", "stadiamaps_api_key")
+
+
+def get_stadia_api_key() -> "str | None":
+    """Ищет ключ Stadia в Secrets.
+
+    Отдельно проверяем вложенные секции: в TOML всё, что записано ПОСЛЕ
+    заголовка вида [gcp_service_account], автоматически попадает внутрь
+    этой секции. Если ключ дописали в конец файла, он оказывается не на
+    верхнем уровне, а внутри чужой секции — и обычный поиск его не
+    находит. Это самая частая причина «ключ записан, но не работает»."""
+    try:
+        secrets = st.secrets
+    except Exception:
+        return None
+
+    for name in _STADIA_SECRET_NAMES:
+        try:
+            value = secrets.get(name)
+        except Exception:
+            value = None
+        if value:
+            return str(value).strip()
+
+    # Обход вложенных секций.
+    try:
+        for section_value in secrets.values():
+            if hasattr(section_value, "get"):
+                for name in _STADIA_SECRET_NAMES:
+                    nested = section_value.get(name)
+                    if nested:
+                        return str(nested).strip()
+    except Exception:
+        pass
+    return None
+
 
 def get_selected_map_style() -> str:
     style = st.session_state.get("map_style_choice", DEFAULT_MAP_STYLE)
@@ -2017,10 +2064,7 @@ def build_map_config(center_lat: float, center_lon: float, zoom: float) -> dict:
 
     url = cfg["raster"]
     if cfg.get("needs_key"):
-        try:
-            api_key = st.secrets.get("stadia_api_key")
-        except Exception:
-            api_key = None
+        api_key = get_stadia_api_key()
         if api_key:
             url = f"{url}?api_key={api_key}"
 
@@ -2034,6 +2078,21 @@ def build_map_config(center_lat: float, center_lon: float, zoom: float) -> dict:
         }
     ]
     return base
+
+
+def render_map_style_diagnostics() -> None:
+    """Подсказка, если выбран стиль с внешними тайлами: видно ли ключ и
+    что проверить, когда подложка не загрузилась."""
+    style_key = get_selected_map_style()
+    cfg = MAP_STYLE_OPTIONS.get(style_key, {})
+    if not cfg.get("needs_key"):
+        return
+    if get_stadia_api_key():
+        st.caption(t("map_stadia_key_found"))
+    else:
+        st.warning(t("map_stadia_key_missing"))
+    st.caption(t("map_stadia_troubleshoot"))
+
 
 
 
@@ -2510,6 +2569,8 @@ def render_sidebar():
         key="map_style_select",
     )
     st.session_state["map_style_choice"] = chosen_style
+    with st.sidebar:
+        render_map_style_diagnostics()
 
     st.sidebar.divider()
     st.sidebar.caption(t("db_autorefresh_note"))
@@ -2994,6 +3055,7 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
                 else:
                     st.plotly_chart(_build_route_map_figure(trip_log, selected_param), width="stretch", key="tab1_route_map")
                     _render_map_legend(selected_param)
+                    render_map_style_diagnostics()
                     if _gps_frozen_ratio(trip_log) > 0.3:
                         st.warning(t("gps_signal_lost_warning"))
 
