@@ -1145,6 +1145,69 @@ def inject_responsive_css() -> None:
 # ЗАГРУЗКА БАЗЫ ДАННЫХ С GOOGLE ДИСКА
 # ============================================================
 
+def _drive_list_folder(service, folder_id: str) -> list:
+    """Рекурсивно перечисляет файлы в папке Google Диска через API.
+    Возвращает список (id, имя, относительный путь)."""
+    items = []
+    stack = [(folder_id, "")]
+    while stack:
+        current_id, prefix = stack.pop()
+        page_token = None
+        while True:
+            response = (
+                service.files()
+                .list(
+                    q=f"'{current_id}' in parents and trashed=false",
+                    fields="nextPageToken, files(id, name, mimeType)",
+                    pageSize=200,
+                    pageToken=page_token,
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                )
+                .execute()
+            )
+            for f in response.get("files", []):
+                if f.get("mimeType") == "application/vnd.google-apps.folder":
+                    stack.append((f["id"], os.path.join(prefix, f["name"])))
+                else:
+                    items.append((f["id"], f["name"], os.path.join(prefix, f["name"])))
+            page_token = response.get("nextPageToken")
+            if not page_token:
+                break
+    return items
+
+
+def download_folder_via_drive_api(service, dest_dir: str) -> "tuple[int, int]":
+    """Скачивает папку через Drive API от имени сервисного аккаунта.
+    В отличие от анонимного скачивания, такие запросы авторизованы, и
+    Google не режет их лимитами на массовые загрузки.
+    Возвращает (сколько скачано, сколько не удалось)."""
+    from googleapiclient.http import MediaIoBaseDownload
+
+    files = _drive_list_folder(service, GDRIVE_FOLDER_ID)
+    ok, failed = 0, 0
+    for file_id, name, rel_path in files:
+        target = os.path.join(dest_dir, rel_path)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        try:
+            request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
+            with io.FileIO(target, "wb") as fh:
+                downloader = MediaIoBaseDownload(fh, request, chunksize=5 * 1024 * 1024)
+                done = False
+                while not done:
+                    _status, done = downloader.next_chunk()
+            ok += 1
+        except Exception as e:
+            failed += 1
+            print(f"[drive] не удалось скачать {name}: {e!r}", flush=True)
+            if os.path.exists(target):
+                try:
+                    os.remove(target)
+                except OSError:
+                    pass
+    return ok, failed
+
+
 @st.cache_resource(show_spinner=False, ttl=DB_CACHE_TTL_SECONDS)
 def download_database() -> str:
     """Скачивает содержимое папки на Google Диске во временное
@@ -1169,12 +1232,51 @@ def download_database() -> str:
         try:
             print(f"[download_database] начинаю скачивание папки {GDRIVE_FOLDER_ID} -> {temp_dir}", flush=True)
             t0 = time.time()
-            try:
-                gdown.download_folder(id=GDRIVE_FOLDER_ID, output=temp_dir, quiet=True, use_cookies=False)
-            except Exception as e:
-                print(f"[download_database] gdown.download_folder упал за {time.time() - t0:.1f} сек: {e!r}", flush=True)
-                raise
-            print(f"[download_database] gdown.download_folder завершился за {time.time() - t0:.1f} сек", flush=True)
+            download_error = None
+
+            # Если настроен сервисный аккаунт, скачиваем через Drive API:
+            # такие запросы авторизованы, и Google не применяет к ним лимиты
+            # на массовые анонимные загрузки, из-за которых часть файлов
+            # переставала скачиваться по мере роста папки.
+            service = get_drive_service()
+            if service is not None:
+                try:
+                    ok, failed = download_folder_via_drive_api(service, temp_dir)
+                    print(
+                        f"[download_database] Drive API: скачано {ok}, не удалось {failed}, "
+                        f"за {time.time() - t0:.1f} сек",
+                        flush=True,
+                    )
+                    if ok == 0:
+                        download_error = RuntimeError("Drive API не скачал ни одного файла")
+                except Exception as e:
+                    download_error = e
+                    print(f"[download_database] Drive API не сработал: {e!r}", flush=True)
+            else:
+                download_error = RuntimeError("сервисный аккаунт не настроен")
+
+            # Запасной путь — анонимное скачивание через gdown. Оно работает
+            # без всякой настройки, но Google ограничивает такие загрузки,
+            # поэтому часть файлов может не доехать.
+            if download_error is not None:
+                print("[download_database] использую анонимное скачивание (gdown)", flush=True)
+                for attempt in (1, 2):
+                    try:
+                        gdown.download_folder(
+                            id=GDRIVE_FOLDER_ID, output=temp_dir, quiet=True, use_cookies=False
+                        )
+                        download_error = None
+                        break
+                    except Exception as e:
+                        download_error = e
+                        print(
+                            f"[download_database] попытка {attempt} не удалась за "
+                            f"{time.time() - t0:.1f} сек: {e!r}",
+                            flush=True,
+                        )
+                        if attempt == 1:
+                            time.sleep(3)
+            print(f"[download_database] скачивание заняло {time.time() - t0:.1f} сек", flush=True)
 
             db_candidates = []
             for root, _dirs, files in os.walk(temp_dir):
@@ -1183,6 +1285,17 @@ def download_database() -> str:
                         db_candidates.append(os.path.join(root, fname))
 
             print(f"[download_database] найдено файлов .db: {len(db_candidates)}: {db_candidates}", flush=True)
+
+            if download_error is not None and db_candidates:
+                # База на месте — работаем дальше, пусть часть отчётов и не
+                # доехала. Полностью терять работоспособность из-за этого
+                # неправильно.
+                print(
+                    "[download_database] часть файлов не скачалась, но база данных получена — продолжаем",
+                    flush=True,
+                )
+            elif download_error is not None:
+                raise download_error
 
             if not db_candidates:
                 raise RuntimeError(
@@ -5257,13 +5370,27 @@ def main():
 
     with tab1:
         if not db_ok:
-            st.warning(t("db_missing")) if db_missing else st.error(t("db_error").format(error=db_error_message))
+            # Именно if/else, а не тернарное выражение: у Streamlit включена
+            # "магия", которая сама выводит значение выражения-инструкции, а
+            # st.warning() возвращает DeltaGenerator — и на экран попадала его
+            # документация вместо сообщения об ошибке.
+            if db_missing:
+                st.warning(t("db_missing"))
+            else:
+                st.error(t("db_error").format(error=db_error_message))
         else:
             render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, fuel_df)
 
     with tab2:
         if not db_ok:
-            st.warning(t("db_missing")) if db_missing else st.error(t("db_error").format(error=db_error_message))
+            # Именно if/else, а не тернарное выражение: у Streamlit включена
+            # "магия", которая сама выводит значение выражения-инструкции, а
+            # st.warning() возвращает DeltaGenerator — и на экран попадала его
+            # документация вместо сообщения об ошибке.
+            if db_missing:
+                st.warning(t("db_missing"))
+            else:
+                st.error(t("db_error").format(error=db_error_message))
         else:
             render_tab2(trips_df, fastlog_df, db_path, file_version)
 
@@ -5272,7 +5399,14 @@ def main():
 
     with tab4:
         if not db_ok:
-            st.warning(t("db_missing")) if db_missing else st.error(t("db_error").format(error=db_error_message))
+            # Именно if/else, а не тернарное выражение: у Streamlit включена
+            # "магия", которая сама выводит значение выражения-инструкции, а
+            # st.warning() возвращает DeltaGenerator — и на экран попадала его
+            # документация вместо сообщения об ошибке.
+            if db_missing:
+                st.warning(t("db_missing"))
+            else:
+                st.error(t("db_error").format(error=db_error_message))
         else:
             render_tab4(trips_df, temp_df, cell_df, fuel_df)
 
