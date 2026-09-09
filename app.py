@@ -1313,10 +1313,215 @@ def parse_fuelio_pdf(file_bytes: bytes) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+# --- CSV-бэкапы Fuelio ---
+# Fuelio сохраняет резервные копии в Android/Fuelio/backup-csv (в том
+# числе в Google Диск). Формат — CSV из нескольких секций, каждая
+# начинается со строки вида "## Log". Заправки лежат в секции Log:
+#   Data, Odo (km), Fuel (litres), Full, Price, l/100km, latitude,
+#   longitude, City, Notes, Missed, TankNumber, FuelType, VolumePrice, ...
+# Здесь Price — это стоимость всей заправки, а VolumePrice — цена за литр.
+# CSV точнее PDF: в нём есть координаты, признак полного бака и номер
+# бака, поэтому при наличии обоих источников выбираем CSV.
+
+_FUELIO_SECTION_PREFIX = "## "
+
+
+def find_fuelio_csv_backups(folder_path: str) -> list:
+    found = []
+    for root, _dirs, files in os.walk(folder_path):
+        for fname in files:
+            if fname.lower().endswith(".csv"):
+                found.append(os.path.join(root, fname))
+    return sorted(found)
+
+
+def _fuelio_pick_column(columns: list, *keywords: str) -> "str | None":
+    """Ищет колонку по ключевому слову: в реальных файлах названия
+    отличаются единицами измерения — 'Odo (km)' против 'Odo (mi)'."""
+    for col in columns:
+        low = str(col).strip().strip('"').lower()
+        if all(kw in low for kw in keywords):
+            return col
+    return None
+
+
+@st.cache_data(show_spinner=False)
+def parse_fuelio_csv(file_bytes: bytes) -> pd.DataFrame:
+    """Разбирает CSV-бэкап Fuelio. Пустой DataFrame означает, что файл
+    не является бэкапом Fuelio (в папке могут лежать любые CSV).
+
+    Проверено на реальном бэкапе: в секции Log Fuelio уже сам считает
+    расход в колонке 'l/100km', указывает вид топлива кодом FuelType
+    (4xx — газ, 1xx — бензин), пишет скидку в примечании ('Rabat: 0,36 zł',
+    с запятой в качестве десятичного разделителя) и название заправки.
+    Всё это берём как есть, а не пересчитываем заново."""
+    try:
+        text = file_bytes.decode("utf-8-sig", errors="replace")
+    except Exception:
+        return pd.DataFrame()
+
+    lines = text.splitlines()
+    sections, current, buffer = {}, None, []
+    for line in lines:
+        stripped = line.strip().strip('"')
+        if stripped.startswith("##"):
+            if current and buffer:
+                sections[current] = buffer
+            current = stripped.lstrip("#").strip().lower()
+            buffer = []
+        elif current is not None and line.strip():
+            buffer.append(line)
+    if current and buffer:
+        sections[current] = buffer
+
+    log_lines = sections.get("log")
+    if not log_lines or len(log_lines) < 2:
+        return pd.DataFrame()
+
+    try:
+        df = pd.read_csv(io.StringIO("\n".join(log_lines)))
+    except Exception:
+        return pd.DataFrame()
+    if df.empty:
+        return pd.DataFrame()
+
+    cols = list(df.columns)
+    col_date = _fuelio_pick_column(cols, "data") or _fuelio_pick_column(cols, "date")
+    col_odo = _fuelio_pick_column(cols, "odo")
+    col_fuel = _fuelio_pick_column(cols, "fuel", "litr") or _fuelio_pick_column(cols, "fuel", "gallon")
+    col_cost = _fuelio_pick_column(cols, "price", "optional")
+    col_volprice = _fuelio_pick_column(cols, "volumeprice")
+    col_cons = _fuelio_pick_column(cols, "l/100km") or _fuelio_pick_column(cols, "mpg")
+    col_lat = _fuelio_pick_column(cols, "latitude")
+    col_lon = _fuelio_pick_column(cols, "longitude")
+    col_tank = _fuelio_pick_column(cols, "tanknumber")
+    col_ftype = _fuelio_pick_column(cols, "fueltype")
+    col_full = _fuelio_pick_column(cols, "full")
+    col_city = _fuelio_pick_column(cols, "city")
+    col_notes = _fuelio_pick_column(cols, "notes")
+
+    if not (col_date and col_fuel):
+        return pd.DataFrame()
+
+    out = pd.DataFrame(index=df.index)
+    # В файле дата идёт вместе со временем ("2026-09-07 16:13") — время
+    # сохраняем: за один день бывает несколько заправок разными видами топлива.
+    parsed_dt = pd.to_datetime(df[col_date], errors="coerce")
+    out["datetime"] = parsed_dt
+    out["date"] = parsed_dt.dt.date
+    out["liters"] = pd.to_numeric(df[col_fuel], errors="coerce")
+    out["odo"] = pd.to_numeric(df[col_odo], errors="coerce") if col_odo else np.nan
+    out["cost"] = pd.to_numeric(df[col_cost], errors="coerce") if col_cost else np.nan
+
+    if col_volprice:
+        out["price"] = pd.to_numeric(df[col_volprice], errors="coerce")
+    else:
+        out["price"] = np.nan
+    need_price = out["price"].isna() | (out["price"] == 0)
+    if need_price.any():
+        out.loc[need_price, "price"] = (
+            out.loc[need_price, "cost"] / out.loc[need_price, "liters"].replace(0, np.nan)
+        )
+
+    # Расход Fuelio считает сам и кладёт в отдельную колонку. Для неполных
+    # заправок он пуст — это правильно, по ним расход посчитать нельзя.
+    out["consumption_l100"] = pd.to_numeric(df[col_cons], errors="coerce") if col_cons else np.nan
+    out.loc[out["consumption_l100"] == 0, "consumption_l100"] = np.nan
+
+    out["full_tank"] = pd.to_numeric(df[col_full], errors="coerce").fillna(1) if col_full else 1
+    if col_lat and col_lon:
+        lat = pd.to_numeric(df[col_lat], errors="coerce")
+        lon = pd.to_numeric(df[col_lon], errors="coerce")
+        # (0,0) в Fuelio означает "координаты не записаны".
+        valid = (lat != 0) | (lon != 0)
+        out["lat"] = lat.where(valid)
+        out["lon"] = lon.where(valid)
+    out["station"] = df[col_city].astype(str).str.strip() if col_city else None
+    out["tank"] = pd.to_numeric(df[col_tank], errors="coerce") if col_tank else np.nan
+
+    # Вид топлива: код FuelType надёжнее цены (4xx — газ, 1xx — бензин).
+    # Цена остаётся запасным признаком, если кода нет.
+    fuel_type = pd.Series(index=df.index, dtype=object)
+    if col_ftype:
+        codes = pd.to_numeric(df[col_ftype], errors="coerce")
+        fuel_type[(codes >= 400) & (codes < 500)] = "lpg"
+        fuel_type[(codes >= 100) & (codes < 200)] = "petrol"
+    unknown = fuel_type.isna()
+    if unknown.any():
+        fuel_type[unknown] = np.where(
+            out.loc[unknown, "price"].fillna(0) < FUEL_TYPE_PRICE_THRESHOLD, "lpg", "petrol"
+        )
+    out["fuel_type"] = fuel_type
+
+    # Скидка записана в примечании как "Rabat: 0,36 zł" (запятая — разделитель).
+    if col_notes:
+        notes = df[col_notes].astype(str)
+        discount = notes.str.extract(r"Rabat:\s*([\d,\.]+)", expand=False)
+        out["discount"] = pd.to_numeric(
+            discount.str.replace(",", ".", regex=False), errors="coerce"
+        )
+    else:
+        out["discount"] = np.nan
+
+    out = out.dropna(subset=["datetime", "liters"])
+    if out.empty:
+        return pd.DataFrame()
+    return out.sort_values("datetime").reset_index(drop=True)
+
+
+def _compute_consumption_between_fillups(df: pd.DataFrame) -> pd.DataFrame:
+    """Дополняет расход там, где Fuelio его не посчитал (например, в
+    PDF-отчётах или у старых записей). Собственные значения Fuelio НЕ
+    перезаписываются — они точнее, потому что учитывают неполные баки.
+
+    Метод полного бака: залитые сейчас литры — это ровно то, что
+    израсходовано с прошлой полной заправки. Формула сверена с Fuelio:
+    для заправки 31.08 (18.68 л, 392 км) выходит 4.77 л/100км — ровно
+    как в его собственном отчёте. У первой заправки каждого вида
+    топлива расхода нет: не с чем сравнивать пробег."""
+    if df.empty or "odo" not in df.columns:
+        return df
+    df = df.sort_values("datetime").copy()
+    if "consumption_l100" not in df.columns:
+        df["consumption_l100"] = np.nan
+
+    for _fuel_type, group in df.groupby("fuel_type"):
+        distance = group["odo"].diff()
+        computed = group["liters"] / distance * 100.0
+        computed[(distance <= 0) | distance.isna()] = np.nan
+        # Неполная заправка не позволяет применять метод полного бака.
+        if "full_tank" in group.columns:
+            computed[group["full_tank"] != 1] = np.nan
+        missing = df.loc[group.index, "consumption_l100"].isna()
+        df.loc[group.index[missing], "consumption_l100"] = computed[missing]
+    return df
+
+
 def load_fuel_reports(folder_path: str) -> pd.DataFrame:
-    """Скачивает и разбирает все PDF-отчёты Fuelio, найденные в папке
-    на Google Диске, и объединяет их в одну таблицу (на случай, если
-    туда со временем добавят несколько отчётов за разные периоды)."""
+    """Собирает данные о заправках из папки на Google Диске.
+
+    Приоритет у CSV-бэкапов Fuelio: они содержат каждую заправку
+    отдельной строкой с координатами и номером бака, тогда как PDF —
+    это уже свёрстанный отчёт, который приходится разбирать по тексту.
+    PDF используется как запасной вариант, если CSV нет."""
+    csv_frames = []
+    for path in find_fuelio_csv_backups(folder_path):
+        try:
+            with open(path, "rb") as f:
+                df = parse_fuelio_csv(f.read())
+            if not df.empty:
+                csv_frames.append(df)
+        except Exception:
+            continue
+
+    if csv_frames:
+        combined = pd.concat(csv_frames, ignore_index=True)
+        combined = combined.drop_duplicates(subset=["date", "odo", "liters"])
+        combined = combined.sort_values("datetime").reset_index(drop=True)
+        combined = _compute_consumption_between_fillups(combined)
+        combined.attrs["source"] = "csv"
+        return combined
+
     pdf_paths = find_fuel_report_pdfs(folder_path)
     if not pdf_paths:
         return pd.DataFrame()
@@ -2091,7 +2296,6 @@ def render_map_style_diagnostics() -> None:
         st.caption(t("map_stadia_key_found"))
     else:
         st.warning(t("map_stadia_key_missing"))
-    st.caption(t("map_stadia_troubleshoot"))
 
 
 
@@ -3055,7 +3259,6 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
                 else:
                     st.plotly_chart(_build_route_map_figure(trip_log, selected_param), width="stretch", key="tab1_route_map")
                     _render_map_legend(selected_param)
-                    render_map_style_diagnostics()
                     if _gps_frozen_ratio(trip_log) > 0.3:
                         st.warning(t("gps_signal_lost_warning"))
 
