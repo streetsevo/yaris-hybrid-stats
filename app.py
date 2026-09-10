@@ -278,12 +278,12 @@ TR = {
         "gps_signal_lost_warning": "⚠️ GPS-модуль частично потерял сигнал во время этой поездки (по данным OBD машина ехала, но координаты не обновлялись) — на карте показан только участок с надёжным сигналом. Это ограничение исходных данных, а не ошибка приложения.",
         "not_enough_data": "Недостаточно данных для расчёта.",
         # --- Вкладки ---
-        "tab1": "📊 Аналитика и Диагностика",
-        "tab2": "📈 Детальные логи",
-        "tab_triplog": "🧭 TripLog: маршруты",
-        "tab3": "🔋 Мониторинг Dr. Prius",
-        "tab4": "⚖️ Сравнение и тренды",
-        "tab5": "🔧 Техническое обслуживание",
+        "tab1": "Аналитика и Диагностика",
+        "tab2": "Детальные логи",
+        "tab_triplog": "TripLog: маршруты",
+        "tab3": "Мониторинг Dr. Prius",
+        "tab4": "Сравнение и тренды",
+        "tab5": "Техническое обслуживание",
         # --- Код доступа к картам ---
         "map_code_label": "Введите код доступа",
         "access_dialog_subtitle": "Панель диагностики",
@@ -679,12 +679,12 @@ TR = {
         "no_gps_data": "Brak danych GPS dla tego przejazdu/okresu.",
         "gps_signal_lost_warning": "⚠️ Moduł GPS częściowo utracił sygnał podczas tego przejazdu (wg danych OBD samochód jechał, ale współrzędne się nie aktualizowały) — na mapie pokazano tylko odcinek z wiarygodnym sygnałem. To ograniczenie danych źródłowych, a nie błąd aplikacji.",
         "not_enough_data": "Za mało danych do obliczeń.",
-        "tab1": "📊 Analityka i Diagnostyka",
-        "tab2": "📈 Szczegółowe logi",
-        "tab_triplog": "🧭 TripLog: trasy",
-        "tab3": "🔋 Monitorowanie Dr. Prius",
-        "tab4": "⚖️ Porównanie i trendy",
-        "tab5": "🔧 Przeglądy techniczne",
+        "tab1": "Analityka i Diagnostyka",
+        "tab2": "Szczegółowe logi",
+        "tab_triplog": "TripLog: trasy",
+        "tab3": "Monitorowanie Dr. Prius",
+        "tab4": "Porównanie i trendy",
+        "tab5": "Przeglądy techniczne",
         "map_code_label": "Wprowadź kod dostępu",
         "access_dialog_subtitle": "Panel diagnostyczny",
         "map_code_check_button": "Sprawdź kod",
@@ -1196,7 +1196,7 @@ def inject_responsive_css() -> None:
            заголовок, поэтому текст читается без дополнительной плашки. */
         .app-header {{
             position: relative;
-            height: 116px;
+            height: 138px;
             margin: 0 0 1.1rem 0;
             border-radius: 16px;
             overflow: hidden;
@@ -1205,14 +1205,19 @@ def inject_responsive_css() -> None:
             border: 1px solid rgba(255, 120, 90, 0.16);
             background-image:
                 linear-gradient(to right,
-                    rgba(10, 11, 14, 0.94) 0%,
-                    rgba(10, 11, 14, 0.72) 45%,
-                    rgba(10, 11, 14, 0.25) 100%),
+                    rgba(10, 11, 14, 0.93) 0%,
+                    rgba(10, 11, 14, 0.62) 42%,
+                    rgba(10, 11, 14, 0.10) 100%),
                 url("data:image/webp;base64,{_HEADER_IMAGE_B64}");
+            /* Якорь по правому краю: фара находится в правой части кадра,
+               и при узком экране «cover» иначе обрезает её по центру. */
             background-size: cover;
-            background-position: center 55%;
+            background-position: right center;
         }}
-        .app-header-text {{ padding: 0 1.15rem; }}
+        .app-header-text {{
+            padding: 0.5rem 1.15rem;
+            max-width: 68%;
+        }}
         .app-header-title {{
             color: #f2f5fa;
             font-size: 1.32rem;
@@ -1279,8 +1284,9 @@ def inject_responsive_css() -> None:
            и задаём минимальную ширину — получается аккуратная сетка
            по две метрики в ряд вместо пяти сплющенных. */
         @media (max-width: 640px) {{
-            .app-header {{ height: 96px; }}
-            .app-header-title {{ font-size: 1.12rem; }}
+            .app-header {{ height: 118px; }}
+            .app-header-title {{ font-size: 1.05rem; }}
+            .app-header-text {{ max-width: 72%; }}
             [data-testid="stHorizontalBlock"] {{
                 flex-wrap: wrap !important;
                 gap: 0.4rem !important;
