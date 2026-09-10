@@ -239,13 +239,13 @@ MAINTENANCE_SOON_DAYS = 30
 TR = {
     "ru": {
         "page_title": "Toyota Yaris 4 Hybrid — Диагностика",
-        "app_title": "🚗 Toyota Yaris 4 Hybrid (2021) — Полная диагностика",
+        "app_title": "Toyota Yaris 4 Hybrid (2021) — Полная диагностика",
         "language_label": "Язык / Language",
         "nav_section": "Раздел",
         "app_header_title": "Панель диагностики",
         "refresh_db_button": "🔄 Обновить базу данных",
         "map_style_label": "Стиль карты",
-        "triplog_title": "🧭 Точная карта поездки (TripLog + телеметрия)",
+        "triplog_title": "Точная карта поездки (TripLog + телеметрия)",
         "triplog_explainer": "Геометрия маршрута берётся из TripLog — у него нормальный GPS-трек. Режим EV/ДВС берётся из телеметрии Hybrid Assistant, где он известен всегда. Там, где телеметрии за нужный момент нет, участок помечается отдельным цветом, а не достраивается догадками.",
         "triplog_upload_label": "Загрузите KML-экспорт маршрутов из TripLog",
         "triplog_upload_help": "В TripLog: страница Trips → отметьте поездки → экспорт KML («route details»). Обычный отчёт на email не подойдёт — в нём нет геометрии маршрутов.",
@@ -301,14 +301,15 @@ TR = {
         "metric_fuel_ml": "Расход топлива, мл",
         "metric_brake_events": "Механических торможений",
         # --- Карты ---
-        "map_section_title": "🗺️ Карта поездки",
+        "map_section_title": "Карта поездки",
+        "map_section_group": "Карты и маршруты",
         "map_select_trip": "Выберите поездку",
         "map_param_label": "Показатель на карте",
         "map_param_mode": "Режим (EV / ДВС)",
         "map_param_braking": "Торможение",
         "map_param_speed": "Скорость",
         "map_param_soc": "Заряд батареи (SOC)",
-        "map_period_title": "🗺️ Карта за период",
+        "map_period_title": "Карта за период",
         "map_period_label": "Период",
         "map_period_day": "День",
         "map_period_week": "Неделя",
@@ -319,7 +320,7 @@ TR = {
         "unit_kmh": "км/ч",
         "unit_l100km": "л/100км",
         "unit_l": "л",
-        "weather_title": "🌤️ Метеорологические условия поездки",
+        "weather_title": "Метеорологические условия поездки",
         "weather_loading": "Запрашиваю историческую погоду…",
         "weather_no_gps": "Нет достоверных GPS-координат для этой поездки — без них невозможно узнать, какая была погода именно в том месте.",
         "weather_no_time": "Не удалось определить время старта поездки.",
@@ -335,7 +336,7 @@ TR = {
         "weather_headwind_slow": "🌬️ Встречный ветер ~{speed} км/ч. На такой средней скорости аэродинамика почти не влияет на расход.",
         "weather_tailwind": "🍃 Попутный ветер ~{speed} км/ч — аэродинамическое сопротивление ниже обычного.",
         "weather_source_note": "Источник погоды: Open-Meteo (историческая реанализация) по координатам старта поездки.",
-        "elevation_profile_title": "⛰️ Профиль высот (рельеф маршрута)",
+        "elevation_profile_title": "Профиль высот (рельеф маршрута)",
         "elevation_no_data": "Нет данных о высоте для этой поездки.",
         "elevation_flat": "Высота на всём маршруте не менялась — либо участок действительно ровный, либо GPS писал высоту с шагом в целые метры.",
         "unit_price_per_l": "zł/л",
@@ -347,7 +348,7 @@ TR = {
         "fuel_type_lpg": "ГБО (газ)",
         "fuel_type_petrol": "Бензин",
         "map_day_refuel_note": "⛽ В этот день заправлено: {fuel} — {liters} л по {price} zł/л.",
-        "fuel_log_title": "⛽ Заправки (реальные данные, отчёт Fuelio)",
+        "fuel_log_title": "Заправки (реальные данные, отчёт Fuelio)",
         "fuel_log_no_data": "Нет данных о заправках — загрузите отчёт Fuelio (PDF) в папку на Google Диске рядом с базой данных.",
         "fuel_last_refuel_date": "Последняя заправка",
         "fuel_liters": "Залито",
@@ -355,13 +356,13 @@ TR = {
         "fuel_days_ago": "{days} дн. назад",
         "fuel_avg_consumption": "Средний расход",
         "fuel_petrol_no_avg_note": "Нет данных — неизвестно, сколько бензина было в баке до начала наблюдений, а расход сильно зависит от доли использования бензина (в основном пуск/прогрев), так что усреднение по общему пробегу вводит в заблуждение.",
-        "fuel_trend_title": "📈 История заправок",
+        "fuel_trend_title": "История заправок",
         "fuel_metric_label": "Показатель",
         "fuel_metric_days": "Дней с прошлой заправки",
         "fuel_metric_liters": "Сколько залито, л",
         "fuel_metric_cost": "Стоимость, zł",
         "fuel_period_label": "Период",
-        "fuel_trend_health_title": "⛽ Тренд реального расхода LPG (по чекам)",
+        "fuel_trend_health_title": "Тренд реального расхода LPG (по чекам)",
         "fuel_lpg_trend_warn": "⚠️ Реальный расход LPG растёт (~{value} л/100км в мес.) — стоит проверить ГБО (форсунки, редуктор, смесь).",
         "fuel_lpg_trend_ok": "Реальный расход LPG стабилен или снижается — признаков проблем с ГБО не выявлено.",
         "fuel_crosscheck_title": "Сверка: прогноз ЭБУ vs реальный расход, по месяцам",
@@ -369,18 +370,18 @@ TR = {
         "legend_ev": "EV (ДВС выключен)",
         "legend_ice": "ДВС работает",
         # --- Экспертные параметры ---
-        "expert_params_title": "🧪 Экспертные параметры",
+        "expert_params_title": "Экспертные параметры",
         "ltft_title": "Долговременная топливная коррекция (LTFT), среднее после установки ГБО",
         "ltft_warning": "⚠️ Рекомендуется проверить газовые форсунки и карту ГБО (смесь неоптимальна).",
         "hv_safety_title": "Индикатор безопасности ВВБ (сопротивление изоляции)",
         "hv_safety_no_data": "ℹ️ Hybrid Assistant не считывает параметр сопротивления изоляции ВВБ через OBD — эта диагностика недоступна программно. Для проверки изоляции обратитесь в сервис с мегаомметром.",
         # --- Smart diagnostics ---
-        "smart_diag_title": "🔮 Умный прогноз (Smart Diagnostics)",
+        "smart_diag_title": "Умный прогноз (Smart Diagnostics)",
         "soh_forecast_title": "Прогноз остатка ресурса ВВБ до критической дельты (0.20В)",
         "soh_forecast_result": "При текущей динамике критическая дельта ожидается примерно через {days} дн. ({date}).",
         "soh_forecast_stable": "Дельта напряжений стабильна или уменьшается — угрозы в обозримом будущем не выявлено.",
         "soh_no_data_hint": "Для расчёта прогноза ВВБ выполните тест HV Check в приложении на телефоне и обновите базу данных.",
-        "maint_forecast_title": "🧰 Прогноз по регламентным работам",
+        "maint_forecast_title": "Прогноз по регламентным работам",
         "maint_gbo_not_installed": "ГБО ещё не установлено (устанавливается на пробеге 117 000 км).",
         "maint_no_record_generic_remaining": "Запись о замене не найдена в журнале. Расчёт ведётся от 2021 года выпуска автомобиля и пробега 0 км. По регламенту осталось: {km} км.",
         "maint_no_record_generic_overdue": "Запись о замене не найдена в журнале. Расчёт ведётся от 2021 года выпуска автомобиля и пробега 0 км. Замена пропущена — пробег без замены: {km} км.",
@@ -398,7 +399,7 @@ TR = {
         "logs_chart_mg": "Мотор-генераторы MG1 / MG2 (обороты и момент)",
         "logs_mg_note": "ℹ️ Hybrid Assistant не логирует фазные токи MG1/MG2 — доступны только обороты и крутящий момент.",
         # --- Полный отчёт по поездке (как в Hybrid Assistant) ---
-        "rep_summary_title": "📋 Сводка по поездке",
+        "rep_summary_title": "Сводка по поездке",
         "rep_trip": "Поездка",
         "rep_distance": "Расстояние",
         "rep_time": "Время",
@@ -412,9 +413,9 @@ TR = {
         "rep_ambient_avg": "Ср. темп. воздуха",
         "rep_fuel_consumption": "Расход топлива",
         "rep_ev_time_note": "Точная классификация EV/ДВС у Hybrid Assistant опирается на внутренний индикатор гибридной системы (HSI) — наш расчёт по ICE_RPM=0 может немного отличаться от их значений.",
-        "rep_soc_title": "🔋 Статистика заряда (SOC)",
+        "rep_soc_title": "Статистика заряда (SOC)",
         "rep_soc_note": "ℹ️ Разбивка \"откуда взялся заряд\" (рекуперация/накат/ДВС) — фирменный внутренний расчёт Hybrid Assistant, у нас нет доступа к точной формуле, поэтому не воспроизводится.",
-        "rep_hv_title": "⚡ Высоковольтная батарея (ВВБ)",
+        "rep_hv_title": "Высоковольтная батарея (ВВБ)",
         "rep_hv_levels": "Уровни",
         "rep_current": "Ток",
         "rep_voltage": "Напряжение",
@@ -424,22 +425,22 @@ TR = {
         "rep_hv_to_batt": "Заряжено в батарею",
         "rep_hv_balance": "Баланс энергии",
         "rep_ccl_dcl_note": "CCL/DCL — лимиты заряда/разряда батареи (меняются с уровнем заряда и температурой).",
-        "rep_temp_title": "🌡️ Температуры",
+        "rep_temp_title": "Температуры",
         "rep_temp_ambient": "Воздух",
         "rep_temp_room": "В салоне/корпусе",
         "rep_temp_coolant": "Охлаждающая жидкость ДВС",
         "rep_temp_inverter": "Инвертор",
         "rep_temp_mg": "Мотор-генератор",
         "rep_hv_probes": "Датчики ВВБ",
-        "rep_elevation_title": "⛰️ Высота над уровнем моря",
+        "rep_elevation_title": "Высота над уровнем моря",
         "rep_altitude": "Высота, м",
         "rep_upward": "Подъём",
         "rep_downward": "Спуск",
         "rep_elevation_note": "Подъём/спуск считаются по колонке GPS-высоты в базе — она грубее, чем внутренний расчёт Hybrid Assistant, поэтому суммарный набор высоты может быть занижен.",
-        "rep_energy_title": "🔥 Энергия от ДВС",
+        "rep_energy_title": "Энергия от ДВС",
         "rep_energy_from_ice": "Энергия от ДВС",
         "rep_energy_per_100km": "Расход энергии",
-        "rep_engine_title": "🚗 Двигатель",
+        "rep_engine_title": "Двигатель",
         "rep_load": "Нагрузка",
         "rep_ignitions_total": "Запусков ДВС",
         "rep_ignitions_inefficient": "Неэффективных (<5 сек)",
@@ -449,16 +450,16 @@ TR = {
         "rep_ice_spinning": "Крутится без топлива",
         "rep_ice_off": "Выключен",
         "rep_engine_state_note": "\"Крутится без топлива\" — накат/торможение двигателем без впрыска (приблизительная оценка по FUELFLOWH).",
-        "rep_psd_title": "⚙️ Планетарный редуктор (PSD): ДВС и MG1/MG2",
+        "rep_psd_title": "Планетарный редуктор (PSD): ДВС и MG1/MG2",
         "rep_ice_torque": "Момент ДВС (расч.)",
         "rep_psd_note": "Момент ДВС рассчитан из мощности и оборотов (М = P / ω) — это оценка, не прямое измерение.",
-        "rep_trims_title": "🎛️ Топливные коррекции",
+        "rep_trims_title": "Топливные коррекции",
         "rep_effective": "Суммарная",
-        "rep_bsfc_title": "⛽ Удельный расход топлива (BSFC)",
+        "rep_bsfc_title": "Удельный расход топлива (BSFC)",
         "rep_bsfc_avg": "Среднее",
         "rep_bsfc_std": "Ст. отклонение",
         "rep_bsfc_note": "BSFC (г/кВт·ч) — сколько топлива тратится на каждый кВт·ч выработанной ДВС мощности; чем меньше, тем эффективнее работает двигатель в данной точке. Считается только по ненулевым показаниям.",
-        "rep_braking_title": "🛑 Торможение",
+        "rep_braking_title": "Торможение",
         "rep_brakings_total": "Всего торможений",
         "rep_brakings_good": "Только рекуперация",
         "rep_brakings_bad": "Только механическое",
@@ -466,15 +467,15 @@ TR = {
         "rep_braking_efficiency": "Эффективность торможений",
         "rep_energy_recovered": "Энергия рекуперации",
         "rep_braking_note": "Эффективность = доля торможений, обошедшихся полностью рекуперацией, без задействования колодок.",
-        "rep_driver_eval_title": "👤 Оценка стиля вождения",
+        "rep_driver_eval_title": "Оценка стиля вождения",
         "rep_accel_nervousness": "\"Нервозность\" педали газа",
         "rep_driver_eval_note": "Нервозность педали — среднее изменение положения педали газа между замерами; чем выше, тем резче стиль езды.",
-        "rep_glide_title": "🛞 Индекс наката (Glide)",
+        "rep_glide_title": "Индекс наката (Glide)",
         "rep_glide_avg": "Средний индекс",
         "rep_glide_max": "Макс. индекс",
         "rep_glide_note": "Индекс наката показывает, насколько эффективно используется накат без тяги ДВС/электромотора. Точная методика Hybrid Assistant не раскрыта, здесь — по сырому показателю GLIDEINDEX из лога.",
-        "rep_maps_title": "🗺️ Карта поездки",
-        "rep_charts_title": "📈 Графики по времени",
+        "rep_maps_title": "Карта поездки",
+        "rep_charts_title": "Графики по времени",
         "logs_battlog_note": "Показаны отдельные датчики ВВБ из подробного лога (BATTLOG) за время этой поездки.",
         "logs_no_battlog": "Подробные датчики ВВБ (BATTLOG) для этой поездки недоступны — показана усреднённая температура ВВБ из основного лога.",
         # --- Вкладка 3: Dr. Prius ---
@@ -509,7 +510,7 @@ TR = {
         "compare_trend_delta": "Рост дельты напряжений во времени",
         "compare_trend_seasonal": "Сезонное сравнение температур ВВБ (лето к лету)",
         "compare_seasonal_not_enough": "В базе данных пока только один сезон/год наблюдений — для сравнения \"лето к лету\" нужно больше исторических данных.",
-        "ha_reports_title": "📄 Тренды из HTML-отчётов Hybrid Assistant",
+        "ha_reports_title": "Тренды из HTML-отчётов Hybrid Assistant",
         "ha_reports_explainer": "Почти все показатели уже честно считаются из самой базы данных (см. вкладку \"Детальные логи\") и совпадают с отчётом почти до знака. Но несколько фирменных расчётов Hybrid Assistant — разбивка заряда батареи по источникам, индекс наката (Glide) и оценка стиля вождения — хранятся только в готовом виде в HTML-отчёте. Загрузи несколько отчётов за разное время, чтобы отслеживать тренды по ним.",
         "ha_reports_upload_label": "Загрузите HTML-отчёты Hybrid Assistant (можно сразу несколько)",
         "ha_reports_limit_caption": "За один раз можно загрузить до 100 файлов, каждый до 200 МБ — это ограничения самого Streamlit по умолчанию.",
@@ -527,8 +528,8 @@ TR = {
         "ha_reports_col_source": "Источник",
         "ha_reports_source_drive": "Google Диск",
         "ha_reports_source_manual": "Загружен вручную",
-        "ha_maps_title": "🗺️ Карты из отчёта Hybrid Assistant",
-        "ha_trip_extras_title": "📄 Данные из HTML-отчёта для этой поездки",
+        "ha_maps_title": "Карты из отчёта Hybrid Assistant",
+        "ha_trip_extras_title": "Данные из HTML-отчёта для этой поездки",
         "ha_maps_source_note": "📄 Карта построена из HTML-отчёта Hybrid Assistant (его собственный расчёт категорий).",
         "ha_trip_no_report": "Для этой поездки не загружен HTML-отчёт. Загрузите отчёты на вкладке «Сравнение и тренды» — приложение само сопоставит их с поездками по времени и покажет здесь фирменные показатели и карты Hybrid Assistant.",
         "ha_trip_report_found": "Найден отчёт для этой поездки: {name}",
@@ -544,23 +545,23 @@ TR = {
         "device_current": "Определено: {device}",
         "ha_reports_parse_error": "⚠️ Не удалось распознать ни один из загруженных файлов как отчёт Hybrid Assistant.",
         "ha_reports_hvcheck_note": "ℹ️ Если в отчёте есть результаты теста HV Check (поблочные напряжения элементов), сообщи мне — пришли пример такого отчёта, и я добавлю автоматическое извлечение этих данных для расчёта SOH, когда в самой базе HV Check пуст.",
-        "ha_trend_soc_title": "🔋 Откуда берётся заряд батареи",
+        "ha_trend_soc_title": "Откуда берётся заряд батареи",
         "ha_soc_brakings": "От рекуперации при торможении",
         "ha_soc_coasting": "От наката",
         "ha_soc_ice": "От ДВС",
         "ha_trend_soc_note": "Доля заряда, полученного от каждого источника, в % от общего прироста SOC за поездку.",
         "ha_trend_brakings_warn": "⚠️ Доля заряда от рекуперативного торможения снижается (~{value} п.п./мес.) — стоит проверить тормозную систему и работу рекуперации.",
         "ha_trend_brakings_ok": "Доля заряда от рекуперации стабильна или растёт — признаков износа не выявлено.",
-        "ha_trend_glide_title": "🛞 Индекс наката (Glide) по отчётам",
+        "ha_trend_glide_title": "Индекс наката (Glide) по отчётам",
         "ha_glide_score": "Glide score",
         "ha_trend_glide_note": "Индекс наката из официального расчёта Hybrid Assistant (точная методика не раскрыта производителем).",
         "ha_trend_glide_warn": "⚠️ Индекс наката снижается (~{value}/мес.) — возможен рост внутреннего сопротивления трансмиссии/PSD, стоит обратить внимание.",
         "ha_trend_glide_ok": "Индекс наката стабилен или растёт — признаков износа трансмиссии не выявлено.",
-        "ha_trend_driver_title": "👤 Стиль вождения по отчётам",
+        "ha_trend_driver_title": "Стиль вождения по отчётам",
         "ha_accel_nervousness": "Нервозность педали газа",
         "ha_braking_efficiency": "Эффективность торможений, %",
         "ha_trend_driver_note": "Это про стиль вождения, а не про исправность автомобиля — просто дополнительный контекст.",
-        "ha_bsfc_crosscheck_title": "⛽ BSFC по отчётам (сверка с расчётом из базы)",
+        "ha_bsfc_crosscheck_title": "BSFC по отчётам (сверка с расчётом из базы)",
         "ha_bsfc_crosscheck_note": "Собственный расчёт BSFC из базы данных — на вкладке \"Детальные логи\" для той же поездки; эти значения должны быть близки.",
         # --- Вкладка 5: ТО ---
         "maintenance_title": "История технического обслуживания",
@@ -616,7 +617,7 @@ TR = {
         "storage_mode_local": "⚠️ Журнал хранится только во временной памяти контейнера и пропадёт при перезапуске приложения. Чтобы записи сохранялись навсегда, создайте сервисный аккаунт Google Cloud, дайте его email право «Редактор» на папку с базой на Google Диске и вставьте его JSON-ключ в Secrets приложения под именем [gcp_service_account].",
         "save_fill_all": "⚠️ Заполните все поля перед сохранением.",
         "invoice_upload_label": "📷 Сфотографируйте фактуру/чек — данные подставятся автоматически",
-        "invoice_section_title": "📷 Автоматическое распознавание фактуры",
+        "invoice_section_title": "Автоматическое распознавание фактуры",
         "invoice_how_it_works": "Сфотографируйте чек или фактуру — приложение распознает дату, пробег и список работ и подставит их в форму ниже. Останется только проверить и сохранить.",
         "invoice_upload_help": "Подойдёт обычное фото с телефона. Важно, чтобы дата, пробег и перечень работ были читаемы.",
         "invoice_waiting": "Обрабатываю фото…",
@@ -631,13 +632,13 @@ TR = {
     },
     "pl": {
         "page_title": "Toyota Yaris 4 Hybrid — Diagnostyka",
-        "app_title": "🚗 Toyota Yaris 4 Hybrid (2021) — Pełna diagnostyka",
+        "app_title": "Toyota Yaris 4 Hybrid (2021) — Pełna diagnostyka",
         "language_label": "Język / Язык",
         "nav_section": "Sekcja",
         "app_header_title": "Panel diagnostyczny",
         "refresh_db_button": "🔄 Odśwież bazę danych",
         "map_style_label": "Styl mapy",
-        "triplog_title": "🧭 Dokładna mapa przejazdu (TripLog + telemetria)",
+        "triplog_title": "Dokładna mapa przejazdu (TripLog + telemetria)",
         "triplog_explainer": "Geometria trasy pochodzi z TripLog — tam ślad GPS jest poprawny. Tryb EV/silnik pochodzi z telemetrii Hybrid Assistant, gdzie jest znany zawsze. Tam, gdzie telemetrii na dany moment brak, odcinek oznaczany jest osobnym kolorem, a nie zgadywany.",
         "triplog_upload_label": "Wgraj eksport tras KML z TripLog",
         "triplog_upload_help": "W TripLog: strona Trips → zaznacz przejazdy → eksport KML („route details”). Zwykły raport wysyłany e-mailem nie zadziała — nie zawiera geometrii tras.",
@@ -689,14 +690,15 @@ TR = {
         "metric_ice_pct": "% trasy na silniku",
         "metric_fuel_ml": "Zużyte paliwo, ml",
         "metric_brake_events": "Hamowań mechanicznych",
-        "map_section_title": "🗺️ Mapa przejazdu",
+        "map_section_title": "Mapa przejazdu",
+        "map_section_group": "Mapy i trasy",
         "map_select_trip": "Wybierz przejazd",
         "map_param_label": "Parametr na mapie",
         "map_param_mode": "Tryb (EV / silnik)",
         "map_param_braking": "Hamowanie",
         "map_param_speed": "Prędkość",
         "map_param_soc": "Poziom naładowania (SOC)",
-        "map_period_title": "🗺️ Mapa za okres",
+        "map_period_title": "Mapa za okres",
         "map_period_label": "Okres",
         "map_period_day": "Dzień",
         "map_period_week": "Tydzień",
@@ -707,7 +709,7 @@ TR = {
         "unit_kmh": "km/h",
         "unit_l100km": "l/100km",
         "unit_l": "l",
-        "weather_title": "🌤️ Warunki meteorologiczne przejazdu",
+        "weather_title": "Warunki meteorologiczne przejazdu",
         "weather_loading": "Pobieram dane historyczne o pogodzie…",
         "weather_no_gps": "Brak wiarygodnych współrzędnych GPS dla tego przejazdu — bez nich nie da się ustalić, jaka była pogoda dokładnie w tym miejscu.",
         "weather_no_time": "Nie udało się ustalić czasu startu przejazdu.",
@@ -723,7 +725,7 @@ TR = {
         "weather_headwind_slow": "🌬️ Wiatr czołowy ~{speed} km/h. Przy tej średniej prędkości aerodynamika prawie nie wpływa na spalanie.",
         "weather_tailwind": "🍃 Wiatr tylny ~{speed} km/h — opór aerodynamiczny niższy niż zwykle.",
         "weather_source_note": "Źródło pogody: Open-Meteo (historyczna reanaliza) dla współrzędnych startu przejazdu.",
-        "elevation_profile_title": "⛰️ Profil wysokości (ukształtowanie trasy)",
+        "elevation_profile_title": "Profil wysokości (ukształtowanie trasy)",
         "elevation_no_data": "Brak danych o wysokości dla tego przejazdu.",
         "elevation_flat": "Wysokość nie zmieniała się na całej trasie — albo odcinek jest rzeczywiście płaski, albo GPS zapisywał wysokość z dokładnością do pełnych metrów.",
         "unit_price_per_l": "zł/l",
@@ -735,7 +737,7 @@ TR = {
         "fuel_type_lpg": "LPG (gaz)",
         "fuel_type_petrol": "Benzyna",
         "map_day_refuel_note": "⛽ Tego dnia zatankowano: {fuel} — {liters} l po {price} zł/l.",
-        "fuel_log_title": "⛽ Tankowania (dane rzeczywiste, raport Fuelio)",
+        "fuel_log_title": "Tankowania (dane rzeczywiste, raport Fuelio)",
         "fuel_log_no_data": "Brak danych o tankowaniach — wgraj raport Fuelio (PDF) do folderu na Google Drive obok bazy danych.",
         "fuel_last_refuel_date": "Ostatnie tankowanie",
         "fuel_liters": "Zatankowano",
@@ -743,30 +745,30 @@ TR = {
         "fuel_days_ago": "{days} dni temu",
         "fuel_avg_consumption": "Średnie spalanie",
         "fuel_petrol_no_avg_note": "Brak danych — nie wiadomo, ile benzyny było w baku przed rozpoczęciem obserwacji, a spalanie mocno zależy od udziału używania benzyny (głównie rozruch/rozgrzewanie), więc uśrednianie po całym przebiegu byłoby mylące.",
-        "fuel_trend_title": "📈 Historia tankowań",
+        "fuel_trend_title": "Historia tankowań",
         "fuel_metric_label": "Wskaźnik",
         "fuel_metric_days": "Dni od poprzedniego tankowania",
         "fuel_metric_liters": "Ile zatankowano, l",
         "fuel_metric_cost": "Koszt, zł",
         "fuel_period_label": "Okres",
-        "fuel_trend_health_title": "⛽ Trend rzeczywistego spalania LPG (wg paragonów)",
+        "fuel_trend_health_title": "Trend rzeczywistego spalania LPG (wg paragonów)",
         "fuel_lpg_trend_warn": "⚠️ Rzeczywiste spalanie LPG rośnie (~{value} l/100km/mies.) — warto sprawdzić instalację LPG (wtryskiwacze, reduktor, mieszankę).",
         "fuel_lpg_trend_ok": "Rzeczywiste spalanie LPG jest stabilne lub maleje — nie wykryto oznak problemów z LPG.",
         "fuel_crosscheck_title": "Weryfikacja: prognoza sterownika vs rzeczywiste spalanie, wg miesięcy",
         "fuel_crosscheck_note": "Jeśli rozbieżność między prognozą a rzeczywistym spalaniem rośnie z czasem — możliwe rozkalibrowanie wtryskiwaczy/czujników, warto przyjrzeć się LTFT w zakładce \"Analityka\".",
         "legend_ev": "EV (silnik wyłączony)",
         "legend_ice": "Silnik pracuje",
-        "expert_params_title": "🧪 Parametry eksperckie",
+        "expert_params_title": "Parametry eksperckie",
         "ltft_title": "Długoterminowa korekta paliwa (LTFT), średnia po montażu LPG",
         "ltft_warning": "⚠️ Zalecana kontrola wtryskiwaczy gazowych i mapy LPG (mieszanka nieoptymalna).",
         "hv_safety_title": "Wskaźnik bezpieczeństwa HV (rezystancja izolacji)",
         "hv_safety_no_data": "ℹ️ Hybrid Assistant nie odczytuje rezystancji izolacji HV przez OBD — ta diagnostyka jest niedostępna programowo. W celu sprawdzenia izolacji skontaktuj się z serwisem (megaomomierz).",
-        "smart_diag_title": "🔮 Inteligentna prognoza (Smart Diagnostics)",
+        "smart_diag_title": "Inteligentna prognoza (Smart Diagnostics)",
         "soh_forecast_title": "Prognoza zasobu baterii HV do krytycznej delty (0.20V)",
         "soh_forecast_result": "Przy obecnej dynamice krytyczna delta oczekiwana za ok. {days} dni ({date}).",
         "soh_forecast_stable": "Delta napięć jest stabilna lub maleje — nie wykryto zagrożenia w najbliższym czasie.",
         "soh_no_data_hint": "Aby obliczyć prognozę baterii HV, wykonaj test HV Check w aplikacji na telefonie i zaktualizuj bazę danych.",
-        "maint_forecast_title": "🧰 Prognoza przeglądów okresowych",
+        "maint_forecast_title": "Prognoza przeglądów okresowych",
         "maint_gbo_not_installed": "LPG jeszcze nie zamontowano (montaż przy przebiegu 117 000 km).",
         "maint_no_record_generic_remaining": "Nie znaleziono wpisu o wymianie w dzienniku. Obliczenia liczone są od 2021 roku produkcji auta i przebiegu 0 km. Pozostało wg harmonogramu: {km} km.",
         "maint_no_record_generic_overdue": "Nie znaleziono wpisu o wymianie w dzienniku. Obliczenia liczone są od 2021 roku produkcji auta i przebiegu 0 km. Wymiana przeoczona — przebieg bez wymiany: {km} km.",
@@ -783,7 +785,7 @@ TR = {
         "logs_chart_mg": "Silniki MG1 / MG2 (obroty i moment)",
         "logs_mg_note": "ℹ️ Hybrid Assistant nie loguje prądów fazowych MG1/MG2 — dostępne są tylko obroty i moment obrotowy.",
         # --- Pełny raport przejazdu (jak w Hybrid Assistant) ---
-        "rep_summary_title": "📋 Podsumowanie przejazdu",
+        "rep_summary_title": "Podsumowanie przejazdu",
         "rep_trip": "Przejazd",
         "rep_distance": "Odległość",
         "rep_time": "Czas",
@@ -797,9 +799,9 @@ TR = {
         "rep_ambient_avg": "Śr. temp. otoczenia",
         "rep_fuel_consumption": "Spalanie paliwa",
         "rep_ev_time_note": "Dokładna klasyfikacja EV/silnik w Hybrid Assistant opiera się na wewnętrznym wskaźniku systemu hybrydowego (HSI) — nasze obliczenie na podstawie ICE_RPM=0 może się nieznacznie różnić od ich wartości.",
-        "rep_soc_title": "🔋 Statystyka naładowania (SOC)",
+        "rep_soc_title": "Statystyka naładowania (SOC)",
         "rep_soc_note": "ℹ️ Podział \"skąd wzięło się naładowanie\" (rekuperacja/wybieg/silnik spalinowy) to wewnętrzny, zastrzeżony algorytm Hybrid Assistant — nie mamy dostępu do dokładnego wzoru, więc nie jest odtwarzany.",
-        "rep_hv_title": "⚡ Bateria wysokiego napięcia (HV)",
+        "rep_hv_title": "Bateria wysokiego napięcia (HV)",
         "rep_hv_levels": "Poziomy",
         "rep_current": "Prąd",
         "rep_voltage": "Napięcie",
@@ -809,22 +811,22 @@ TR = {
         "rep_hv_to_batt": "Naładowane do baterii",
         "rep_hv_balance": "Bilans energii",
         "rep_ccl_dcl_note": "CCL/DCL — limity ładowania/rozładowania baterii (zmieniają się z poziomem naładowania i temperaturą).",
-        "rep_temp_title": "🌡️ Temperatury",
+        "rep_temp_title": "Temperatury",
         "rep_temp_ambient": "Powietrze",
         "rep_temp_room": "W kabinie/obudowie",
         "rep_temp_coolant": "Płyn chłodniczy silnika",
         "rep_temp_inverter": "Falownik",
         "rep_temp_mg": "Silnik elektryczny",
         "rep_hv_probes": "Czujniki baterii HV",
-        "rep_elevation_title": "⛰️ Wysokość nad poziomem morza",
+        "rep_elevation_title": "Wysokość nad poziomem morza",
         "rep_altitude": "Wysokość, m",
         "rep_upward": "Podjazd",
         "rep_downward": "Zjazd",
         "rep_elevation_note": "Podjazd/zjazd liczone są na podstawie kolumny wysokości GPS w bazie — jest ona mniej dokładna niż wewnętrzne obliczenia Hybrid Assistant, więc łączny przyrost wysokości może być zaniżony.",
-        "rep_energy_title": "🔥 Energia z silnika spalinowego",
+        "rep_energy_title": "Energia z silnika spalinowego",
         "rep_energy_from_ice": "Energia z silnika",
         "rep_energy_per_100km": "Zużycie energii",
-        "rep_engine_title": "🚗 Silnik",
+        "rep_engine_title": "Silnik",
         "rep_load": "Obciążenie",
         "rep_ignitions_total": "Uruchomień silnika",
         "rep_ignitions_inefficient": "Nieefektywnych (<5 s)",
@@ -834,16 +836,16 @@ TR = {
         "rep_ice_spinning": "Kręci się bez paliwa",
         "rep_ice_off": "Wyłączony",
         "rep_engine_state_note": "\"Kręci się bez paliwa\" — wybieg/hamowanie silnikiem bez wtrysku (przybliżona ocena na podstawie FUELFLOWH).",
-        "rep_psd_title": "⚙️ Przekładnia planetarna (PSD): silnik i MG1/MG2",
+        "rep_psd_title": "Przekładnia planetarna (PSD): silnik i MG1/MG2",
         "rep_ice_torque": "Moment silnika (wyl.)",
         "rep_psd_note": "Moment silnika obliczony z mocy i obrotów (M = P / ω) — to szacunek, nie bezpośredni pomiar.",
-        "rep_trims_title": "🎛️ Korekty paliwa",
+        "rep_trims_title": "Korekty paliwa",
         "rep_effective": "Łączna",
-        "rep_bsfc_title": "⛽ Jednostkowe zużycie paliwa (BSFC)",
+        "rep_bsfc_title": "Jednostkowe zużycie paliwa (BSFC)",
         "rep_bsfc_avg": "Średnia",
         "rep_bsfc_std": "Odch. std",
         "rep_bsfc_note": "BSFC (g/kWh) — ile paliwa zużywa się na każdą kWh mocy wytworzonej przez silnik; im mniej, tym silnik pracuje efektywniej w danym punkcie. Liczone tylko po niezerowych odczytach.",
-        "rep_braking_title": "🛑 Hamowanie",
+        "rep_braking_title": "Hamowanie",
         "rep_brakings_total": "Wszystkich hamowań",
         "rep_brakings_good": "Tylko rekuperacja",
         "rep_brakings_bad": "Tylko mechaniczne",
@@ -851,15 +853,15 @@ TR = {
         "rep_braking_efficiency": "Efektywność hamowań",
         "rep_energy_recovered": "Energia z rekuperacji",
         "rep_braking_note": "Efektywność = odsetek hamowań, które obyły się wyłącznie rekuperacją, bez użycia klocków.",
-        "rep_driver_eval_title": "👤 Ocena stylu jazdy",
+        "rep_driver_eval_title": "Ocena stylu jazdy",
         "rep_accel_nervousness": "\"Nerwowość\" pedału gazu",
         "rep_driver_eval_note": "Nerwowość pedału — średnia zmiana położenia pedału gazu między pomiarami; im wyższa, tym bardziej gwałtowny styl jazdy.",
-        "rep_glide_title": "🛞 Indeks wybiegu (Glide)",
+        "rep_glide_title": "Indeks wybiegu (Glide)",
         "rep_glide_avg": "Średni indeks",
         "rep_glide_max": "Maks. indeks",
         "rep_glide_note": "Indeks wybiegu pokazuje, jak efektywnie wykorzystywany jest wybieg bez napędu silnika/elektromotoru. Dokładna metodologia Hybrid Assistant nie jest ujawniona — tu użyto surowego wskaźnika GLIDEINDEX z logu.",
-        "rep_maps_title": "🗺️ Mapa przejazdu",
-        "rep_charts_title": "📈 Wykresy w czasie",
+        "rep_maps_title": "Mapa przejazdu",
+        "rep_charts_title": "Wykresy w czasie",
         "logs_battlog_note": "Pokazano osobne czujniki baterii HV ze szczegółowego logu (BATTLOG) dla tego przejazdu.",
         "logs_no_battlog": "Szczegółowe czujniki baterii HV (BATTLOG) niedostępne dla tego przejazdu — pokazano uśrednioną temperaturę z głównego logu.",
         "drprius_upload_label": "Wgraj miesięczny raport CSV z Dr. Prius",
@@ -892,7 +894,7 @@ TR = {
         "compare_trend_delta": "Wzrost delty napięć w czasie",
         "compare_trend_seasonal": "Sezonowe porównanie temperatur HV (lato do lata)",
         "compare_seasonal_not_enough": "W bazie danych jest na razie tylko jeden sezon/rok obserwacji — do porównania \"lato do lata\" potrzeba więcej danych historycznych.",
-        "ha_reports_title": "📄 Trendy z raportów HTML Hybrid Assistant",
+        "ha_reports_title": "Trendy z raportów HTML Hybrid Assistant",
         "ha_reports_explainer": "Prawie wszystkie wskaźniki są już rzetelnie liczone z samej bazy danych (patrz zakładka \"Szczegółowe logi\") i pokrywają się z raportem niemal co do cyfry. Ale kilka zastrzeżonych obliczeń Hybrid Assistant — podział naładowania baterii wg źródeł, indeks wybiegu (Glide) i ocena stylu jazdy — jest dostępnych tylko w gotowej postaci w raporcie HTML. Wgraj kilka raportów z różnych okresów, aby śledzić trendy.",
         "ha_reports_upload_label": "Wgraj raporty HTML Hybrid Assistant (można od razu kilka)",
         "ha_reports_limit_caption": "Jednorazowo można wgrać do 100 plików, każdy do 200 MB — to domyślne ograniczenia samego Streamlit.",
@@ -910,8 +912,8 @@ TR = {
         "ha_reports_col_source": "Źródło",
         "ha_reports_source_drive": "Google Drive",
         "ha_reports_source_manual": "Wgrany ręcznie",
-        "ha_maps_title": "🗺️ Mapy z raportu Hybrid Assistant",
-        "ha_trip_extras_title": "📄 Dane z raportu HTML dla tego przejazdu",
+        "ha_maps_title": "Mapy z raportu Hybrid Assistant",
+        "ha_trip_extras_title": "Dane z raportu HTML dla tego przejazdu",
         "ha_maps_source_note": "📄 Mapa zbudowana z raportu HTML Hybrid Assistant (jego własne obliczenie kategorii).",
         "ha_trip_no_report": "Dla tego przejazdu nie wgrano raportu HTML. Wgraj raporty w zakładce „Porównanie i trendy” — aplikacja sama dopasuje je do przejazdów po czasie i pokaże tutaj firmowe wskaźniki oraz mapy Hybrid Assistant.",
         "ha_trip_report_found": "Znaleziono raport dla tego przejazdu: {name}",
@@ -927,23 +929,23 @@ TR = {
         "device_current": "Wykryto: {device}",
         "ha_reports_parse_error": "⚠️ Nie udało się rozpoznać żadnego z wgranych plików jako raportu Hybrid Assistant.",
         "ha_reports_hvcheck_note": "ℹ️ Jeśli w raporcie są wyniki testu HV Check (napięcia poszczególnych ogniw), daj znać — wyślij przykład takiego raportu, a dodam automatyczne wyciąganie tych danych do obliczenia SOH, gdy HV Check w samej bazie jest pusty.",
-        "ha_trend_soc_title": "🔋 Skąd bierze się naładowanie baterii",
+        "ha_trend_soc_title": "Skąd bierze się naładowanie baterii",
         "ha_soc_brakings": "Z rekuperacji przy hamowaniu",
         "ha_soc_coasting": "Z wybiegu",
         "ha_soc_ice": "Z silnika spalinowego",
         "ha_trend_soc_note": "Udział naładowania z każdego źródła, w % całkowitego przyrostu SOC w przejeździe.",
         "ha_trend_brakings_warn": "⚠️ Udział naładowania z rekuperacji przy hamowaniu maleje (~{value} p.p./mies.) — warto sprawdzić układ hamulcowy i działanie rekuperacji.",
         "ha_trend_brakings_ok": "Udział naładowania z rekuperacji jest stabilny lub rośnie — nie wykryto oznak zużycia.",
-        "ha_trend_glide_title": "🛞 Indeks wybiegu (Glide) wg raportów",
+        "ha_trend_glide_title": "Indeks wybiegu (Glide) wg raportów",
         "ha_glide_score": "Glide score",
         "ha_trend_glide_note": "Indeks wybiegu z oficjalnego obliczenia Hybrid Assistant (dokładna metodologia nie jest ujawniona przez producenta).",
         "ha_trend_glide_warn": "⚠️ Indeks wybiegu maleje (~{value}/mies.) — możliwy wzrost oporu wewnętrznego przekładni/PSD, warto zwrócić uwagę.",
         "ha_trend_glide_ok": "Indeks wybiegu jest stabilny lub rośnie — nie wykryto oznak zużycia przekładni.",
-        "ha_trend_driver_title": "👤 Styl jazdy wg raportów",
+        "ha_trend_driver_title": "Styl jazdy wg raportów",
         "ha_accel_nervousness": "Nerwowość pedału gazu",
         "ha_braking_efficiency": "Efektywność hamowań, %",
         "ha_trend_driver_note": "To dotyczy stylu jazdy, a nie sprawności samochodu — dodatkowy kontekst.",
-        "ha_bsfc_crosscheck_title": "⛽ BSFC wg raportów (weryfikacja z obliczeniem z bazy)",
+        "ha_bsfc_crosscheck_title": "BSFC wg raportów (weryfikacja z obliczeniem z bazy)",
         "ha_bsfc_crosscheck_note": "Własne obliczenie BSFC z bazy danych — w zakładce \"Szczegółowe logi\" dla tego samego przejazdu; te wartości powinny być zbliżone.",
         "maintenance_title": "Historia przeglądów technicznych",
         "maintenance_empty": "Brak zapisanych przeglądów.",
@@ -998,7 +1000,7 @@ TR = {
         "storage_mode_local": "⚠️ Dziennik przechowywany jest tylko w tymczasowej pamięci kontenera i zniknie po restarcie aplikacji. Aby wpisy zapisywały się na stałe, utwórz konto serwisowe Google Cloud, nadaj jego adresowi e-mail uprawnienie „Edytor” do folderu z bazą na Google Drive i wklej jego klucz JSON do Secrets aplikacji pod nazwą [gcp_service_account].",
         "save_fill_all": "⚠️ Uzupełnij wszystkie pola przed zapisaniem.",
         "invoice_upload_label": "📷 Sfotografuj fakturę/paragon — dane zostaną podstawione automatycznie",
-        "invoice_section_title": "📷 Automatyczne rozpoznawanie faktury",
+        "invoice_section_title": "Automatyczne rozpoznawanie faktury",
         "invoice_how_it_works": "Zrób zdjęcie paragonu lub faktury — aplikacja rozpozna datę, przebieg i zakres prac oraz podstawi je do formularza poniżej. Wystarczy sprawdzić i zapisać.",
         "invoice_upload_help": "Wystarczy zwykłe zdjęcie z telefonu. Ważne, aby data, przebieg i zakres prac były czytelne.",
         "invoice_waiting": "Przetwarzam zdjęcie…",
@@ -1218,13 +1220,40 @@ def inject_responsive_css() -> None:
         [data-testid="stMetric"]:hover {{
             border-color: rgba(120, 200, 255, 0.30) !important;
         }}
+        [data-testid="stExpander"] {{
+            margin-bottom: 0.55rem;
+        }}
         [data-testid="stExpander"] details {{
-            background: rgba(255, 255, 255, 0.028);
-            border: 1px solid rgba(140, 160, 200, 0.14) !important;
-            border-radius: 12px !important;
+            background: linear-gradient(145deg,
+                rgba(255, 255, 255, 0.045) 0%,
+                rgba(255, 255, 255, 0.018) 100%);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(140, 160, 200, 0.16) !important;
+            border-radius: 14px !important;
+            overflow: hidden;
+            transition: border-color 240ms ease, box-shadow 240ms ease;
+        }}
+        [data-testid="stExpander"] details:hover {{
+            border-color: rgba(120, 200, 255, 0.34) !important;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.32);
+        }}
+        /* Открытый блок подсвечивается тонкой неоновой полосой слева —
+           сразу видно, какие разделы сейчас развёрнуты. */
+        [data-testid="stExpander"] details[open] {{
+            border-color: rgba(120, 200, 255, 0.30) !important;
+            box-shadow: inset 3px 0 0 0 rgba(90, 180, 255, 0.55);
+        }}
+        [data-testid="stExpander"] summary {{
+            padding: 0.72rem 0.95rem !important;
+            font-weight: 600 !important;
+            font-size: 0.98rem !important;
+            letter-spacing: 0.01em;
+            transition: color 200ms ease, background 200ms ease;
         }}
         [data-testid="stExpander"] summary:hover {{
             color: #9fd0ff;
+            background: rgba(120, 200, 255, 0.06);
         }}
 
         /* На узком экране ряд из 4-5 метрик сжимается до нечитаемых
@@ -2567,10 +2596,6 @@ _DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
 # координат в ссылке {z}/{y}/{x}, а не {z}/{x}/{y}, как у большинства.
 
 MAP_STYLE_OPTIONS = {
-    "carto-darkmatter": {
-        "builtin": "carto-darkmatter",
-        "label": {"ru": "CartoDB Dark Matter (тёмная)", "pl": "CartoDB Dark Matter (ciemna)"},
-    },
     "alidade-smooth-dark": {
         # Обычные тайлы 256px, а не @2x: MapLibre внутри Plotly считает
         # размер тайла равным 256, и retina-версия 512px выравнивается
@@ -2579,6 +2604,10 @@ MAP_STYLE_OPTIONS = {
         "attribution": "© Stadia Maps © OpenMapTiles © OpenStreetMap contributors",
         "needs_key": True,
         "label": {"ru": "Alidade Smooth Dark", "pl": "Alidade Smooth Dark"},
+    },
+    "carto-darkmatter": {
+        "builtin": "carto-darkmatter",
+        "label": {"ru": "CartoDB Dark Matter (тёмная)", "pl": "CartoDB Dark Matter (ciemna)"},
     },
     "esri-world-topo": {
         "raster": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
@@ -2595,7 +2624,7 @@ MAP_STYLE_OPTIONS = {
     },
 }
 
-DEFAULT_MAP_STYLE = "carto-darkmatter"
+DEFAULT_MAP_STYLE = "alidade-smooth-dark"
 
 # ============================================================
 # ФОНОВОЕ ИЗОБРАЖЕНИЕ ЭКРАНА ВВОДА КОДА
@@ -3765,9 +3794,7 @@ def render_triplog_route_section(fastlog: pd.DataFrame) -> None:
     drive_files = get_triplog_files_from_drive()
     if drive_files:
         st.success(t("triplog_drive_found").format(n=len(drive_files)))
-        with st.expander(t("triplog_drive_list"), expanded=False):
-            for f in drive_files:
-                st.markdown(f"- `{f.name}`")
+        st.caption(", ".join(f.name for f in drive_files))
     else:
         st.info(t("triplog_drive_none"))
 
@@ -4024,212 +4051,217 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
 
     st.divider()
 
-    # --- Карты ---
-    if maps_are_unlocked():
-        st.subheader(t("map_section_title"))
-        trip_options = {
-            f"{row['date'].strftime('%Y-%m-%d %H:%M')} — {row['distance']:.1f} км": idx
-            for idx, row in trips_df.sort_values("date", ascending=False).iterrows()
-        }
-        if trip_options and not fastlog_df.empty:
-            selected_label = st.selectbox(t("map_select_trip"), list(trip_options.keys()))
-            sel_idx = trip_options[selected_label]
-            sel_row = trips_df.loc[sel_idx]
-            mask = (fastlog_df["TIMESTAMP"] >= sel_row["TSDEB"]) & (fastlog_df["TIMESTAMP"] <= sel_row["TSFIN"])
-            trip_log = fastlog_df.loc[mask]
-            if trip_log[["GPS_LAT", "GPS_LON"]].dropna().empty:
-                st.info(t("no_gps_data"))
-            else:
-                param_options = {
-                    "mode": t("map_param_mode"),
-                    "braking": t("map_param_braking"),
-                    "speed": t("map_param_speed"),
-                    "soc": t("map_param_soc"),
-                }
-                # Если для этой поездки загружен HTML-отчёт, добавляем его
-                # карты прямо сюда — включая те, что из базы не построить
-                # (мгновенный расход, BSFC, оценка наката).
-                ha_match = find_ha_report_for_trip(sel_row)
-                ha_maps = {}
-                if ha_match is not None:
-                    ha_file_name, _ha_data = ha_match
-                    ha_file_by_name = {f.name: f for f in get_uploaded_ha_files()}
-                    ha_maps = parse_ha_html_maps(ha_file_by_name[ha_file_name].getvalue())
-                    lang_now = st.session_state.get("lang", "pl")
-                    for ha_name in ha_maps:
-                        label = HA_MAP_TITLES.get(ha_name, {}).get(lang_now, ha_name)
-                        param_options[f"ha::{ha_name}"] = f"📄 {label}"
-
-                selected_param = st.selectbox(
-                    t("map_param_label"),
-                    options=list(param_options.keys()),
-                    format_func=lambda k: param_options[k],
-                    key="map_param_select",
-                )
-                if selected_param.startswith("ha::"):
-                    ha_name = selected_param[4:]
-                    render_ha_html_map(ha_name, ha_maps[ha_name], key_prefix="tab1")
-                    st.caption(t("ha_maps_source_note"))
+    with st.expander(t("map_section_group"), expanded=True, icon=":material/map:"):
+        # --- Карты ---
+        if maps_are_unlocked():
+            st.subheader(t("map_section_title"))
+            trip_options = {
+                f"{row['date'].strftime('%Y-%m-%d %H:%M')} — {row['distance']:.1f} км": idx
+                for idx, row in trips_df.sort_values("date", ascending=False).iterrows()
+            }
+            if trip_options and not fastlog_df.empty:
+                selected_label = st.selectbox(t("map_select_trip"), list(trip_options.keys()))
+                sel_idx = trip_options[selected_label]
+                sel_row = trips_df.loc[sel_idx]
+                mask = (fastlog_df["TIMESTAMP"] >= sel_row["TSDEB"]) & (fastlog_df["TIMESTAMP"] <= sel_row["TSFIN"])
+                trip_log = fastlog_df.loc[mask]
+                if trip_log[["GPS_LAT", "GPS_LON"]].dropna().empty:
+                    st.info(t("no_gps_data"))
                 else:
-                    st.plotly_chart(_build_route_map_figure(trip_log, selected_param), width="stretch", key="tab1_route_map")
-                    _render_map_legend(selected_param)
-                    if _gps_frozen_ratio(trip_log) > 0.3:
-                        st.warning(t("gps_signal_lost_warning"))
+                    param_options = {
+                        "mode": t("map_param_mode"),
+                        "braking": t("map_param_braking"),
+                        "speed": t("map_param_speed"),
+                        "soc": t("map_param_soc"),
+                    }
+                    # Если для этой поездки загружен HTML-отчёт, добавляем его
+                    # карты прямо сюда — включая те, что из базы не построить
+                    # (мгновенный расход, BSFC, оценка наката).
+                    ha_match = find_ha_report_for_trip(sel_row)
+                    ha_maps = {}
+                    if ha_match is not None:
+                        ha_file_name, _ha_data = ha_match
+                        ha_file_by_name = {f.name: f for f in get_uploaded_ha_files()}
+                        ha_maps = parse_ha_html_maps(ha_file_by_name[ha_file_name].getvalue())
+                        lang_now = st.session_state.get("lang", "pl")
+                        for ha_name in ha_maps:
+                            label = HA_MAP_TITLES.get(ha_name, {}).get(lang_now, ha_name)
+                            param_options[f"ha::{ha_name}"] = f"📄 {label}"
 
-            ev_pct = sel_row.get("ev_pct")
-            ice_pct = 100 - ev_pct if pd.notna(ev_pct) else None
-            mcol1, mcol2, mcol3, mcol4, mcol5 = st.columns(5)
-            mcol1.metric(t("metric_total_distance"), f"{sel_row['distance']:.1f}")
-            mcol2.metric(t("metric_ev_pct"), f"{ev_pct:.0f}%" if pd.notna(ev_pct) else "—")
-            mcol3.metric(t("metric_ice_pct"), f"{ice_pct:.0f}%" if ice_pct is not None else "—")
-            mcol4.metric(f"{t('metric_fuel_ml')} {t('fuel_forecast_badge')}", f"{sel_row['fuel_ml']:.0f}" if pd.notna(sel_row.get("fuel_ml")) else "—", help=t("fuel_forecast_help"))
-            mcol5.metric(t("metric_brake_events"), f"{int(sel_row['brake_events'])}" if pd.notna(sel_row.get("brake_events")) else "—")
-
-            st.divider()
-            render_trip_weather_section(sel_row, trip_log)
-        else:
-            st.info(t("no_gps_data"))
-
-        st.subheader(t("map_period_title"))
-        period_options = {
-            t("map_period_day"): "D",
-            t("map_period_week"): "W",
-            t("map_period_month"): "M",
-            t("map_period_year"): "Y",
-        }
-        period_label = st.selectbox(t("map_period_label"), list(period_options.keys()), key="period_select")
-        freq = period_options[period_label]
-        if not fastlog_df.empty:
-            latest_ts = fastlog_df["datetime"].max()
-            period_start = {
-                "D": latest_ts.normalize(),
-                "W": latest_ts - timedelta(days=7),
-                "M": latest_ts - timedelta(days=30),
-                "Y": latest_ts - timedelta(days=365),
-            }[freq]
-            period_df = fastlog_df[fastlog_df["datetime"] >= period_start]
-            period_df = _filter_gps_outliers(period_df)
-            period_trips = trips_df[trips_df["date"] >= period_start]
-            period_avg_consumption = period_trips["consumption"].mean()
-
-            points = period_df.dropna(subset=["GPS_LAT", "GPS_LON"])
-            if not points.empty:
-                grid_fig = go.Figure(
-                    go.Scattermap(
-                        lat=points["GPS_LAT"],
-                        lon=points["GPS_LON"],
-                        mode="markers",
-                        marker=dict(size=4, color="#0057FF", opacity=0.4),
-                        hoverinfo="skip",
+                    selected_param = st.selectbox(
+                        t("map_param_label"),
+                        options=list(param_options.keys()),
+                        format_func=lambda k: param_options[k],
+                        key="map_param_select",
                     )
-                )
-                grid_fig.update_layout(
-                    map=build_map_config(
-                        points["GPS_LAT"].mean(), points["GPS_LON"].mean(), 10
-                    ),
-                    margin=dict(l=0, r=0, t=0, b=0),
-                    height=rsp_height(400),
-                )
-                st.plotly_chart(grid_fig, width="stretch", key="tab1_period_map")
-                if pd.notna(period_avg_consumption):
-                    st.markdown(
-                        f"### {t('map_period_avg_consumption').format(value=f'{period_avg_consumption:.1f}')} {t('fuel_forecast_badge')}"
-                    )
-                if freq == "D" and not fuel_df.empty:
-                    day_fuel = fuel_df[fuel_df["date"] == period_start.date()]
-                    for _, frow in day_fuel.iterrows():
-                        fuel_label = t("fuel_type_lpg") if frow["fuel_type"] == "lpg" else t("fuel_type_petrol")
-                        st.success(
-                            t("map_day_refuel_note").format(
-                                fuel=fuel_label,
-                                liters=f"{frow['liters']:.2f}",
-                                price=f"{frow['price']:.2f}",
-                            )
+                    if selected_param.startswith("ha::"):
+                        ha_name = selected_param[4:]
+                        render_ha_html_map(ha_name, ha_maps[ha_name], key_prefix="tab1")
+                        st.caption(t("ha_maps_source_note"))
+                    else:
+                        st.plotly_chart(_build_route_map_figure(trip_log, selected_param), width="stretch", key="tab1_route_map")
+                        _render_map_legend(selected_param)
+                        if _gps_frozen_ratio(trip_log) > 0.3:
+                            st.warning(t("gps_signal_lost_warning"))
+
+                ev_pct = sel_row.get("ev_pct")
+                ice_pct = 100 - ev_pct if pd.notna(ev_pct) else None
+                mcol1, mcol2, mcol3, mcol4, mcol5 = st.columns(5)
+                mcol1.metric(t("metric_total_distance"), f"{sel_row['distance']:.1f}")
+                mcol2.metric(t("metric_ev_pct"), f"{ev_pct:.0f}%" if pd.notna(ev_pct) else "—")
+                mcol3.metric(t("metric_ice_pct"), f"{ice_pct:.0f}%" if ice_pct is not None else "—")
+                mcol4.metric(f"{t('metric_fuel_ml')} {t('fuel_forecast_badge')}", f"{sel_row['fuel_ml']:.0f}" if pd.notna(sel_row.get("fuel_ml")) else "—", help=t("fuel_forecast_help"))
+                mcol5.metric(t("metric_brake_events"), f"{int(sel_row['brake_events'])}" if pd.notna(sel_row.get("brake_events")) else "—")
+
+                st.divider()
+                render_trip_weather_section(sel_row, trip_log)
+            else:
+                st.info(t("no_gps_data"))
+
+            st.subheader(t("map_period_title"))
+            period_options = {
+                t("map_period_day"): "D",
+                t("map_period_week"): "W",
+                t("map_period_month"): "M",
+                t("map_period_year"): "Y",
+            }
+            period_label = st.selectbox(t("map_period_label"), list(period_options.keys()), key="period_select")
+            freq = period_options[period_label]
+            if not fastlog_df.empty:
+                latest_ts = fastlog_df["datetime"].max()
+                period_start = {
+                    "D": latest_ts.normalize(),
+                    "W": latest_ts - timedelta(days=7),
+                    "M": latest_ts - timedelta(days=30),
+                    "Y": latest_ts - timedelta(days=365),
+                }[freq]
+                period_df = fastlog_df[fastlog_df["datetime"] >= period_start]
+                period_df = _filter_gps_outliers(period_df)
+                period_trips = trips_df[trips_df["date"] >= period_start]
+                period_avg_consumption = period_trips["consumption"].mean()
+
+                points = period_df.dropna(subset=["GPS_LAT", "GPS_LON"])
+                if not points.empty:
+                    grid_fig = go.Figure(
+                        go.Scattermap(
+                            lat=points["GPS_LAT"],
+                            lon=points["GPS_LON"],
+                            mode="markers",
+                            marker=dict(size=4, color="#0057FF", opacity=0.4),
+                            hoverinfo="skip",
                         )
-            else:
-                st.info(t("no_gps_data"))
-        st.divider()
-        render_triplog_route_section(fastlog_df)
-    else:
-        render_maps_locked_placeholder()
-
-    st.divider()
-
-    _render_fuel_log_section(fuel_df)
-
-    st.divider()
-
-    # --- Экспертные параметры ---
-    st.subheader(t("expert_params_title"))
-    ecol1, ecol2 = stacked_columns(2)
-    with ecol1:
-        st.markdown(f"**{t('ltft_title')}**")
-        ltft_post_lpg = trips_df.loc[trips_df.get("avg_ltft").notna(), "avg_ltft"] if "avg_ltft" in trips_df else pd.Series(dtype=float)
-        if not ltft_post_lpg.empty:
-            ltft_avg = ltft_post_lpg.mean()
-            st.metric("LTFT", f"{ltft_avg:.1f}%")
-            if ltft_avg < LTFT_WARNING_MIN or ltft_avg > LTFT_WARNING_MAX:
-                st.warning(t("ltft_warning"))
-        else:
-            st.info(t("not_enough_data"))
-    with ecol2:
-        st.markdown(f"**{t('hv_safety_title')}**")
-        st.info(t("hv_safety_no_data"))
-
-    st.divider()
-
-    # --- Smart Diagnostics ---
-    st.subheader(t("smart_diag_title"))
-    dcol1, dcol2 = stacked_columns(2)
-    with dcol1:
-        st.markdown(f"**{t('soh_forecast_title')}**")
-        valid_cell_df = (
-            cell_df.dropna(subset=["cell_delta"]).loc[cell_df["cell_delta"] != 0]
-            if not cell_df.empty
-            else cell_df
-        )
-        if len(valid_cell_df) >= 5:
-            x = (valid_cell_df["timestamp"] - valid_cell_df["timestamp"].min()).dt.total_seconds().to_numpy()
-            y = valid_cell_df["cell_delta"].to_numpy()
-            slope, intercept = np.polyfit(x, y, 1)
-            if slope > 0:
-                seconds_to_critical = (SOH_DELTA_MAX - intercept) / slope - x.max()
-                if seconds_to_critical > 0:
-                    days = int(seconds_to_critical / 86400)
-                    forecast_date = (valid_cell_df["timestamp"].max() + timedelta(seconds=seconds_to_critical)).strftime("%Y-%m-%d")
-                    st.warning(t("soh_forecast_result").format(days=days, date=forecast_date))
+                    )
+                    grid_fig.update_layout(
+                        map=build_map_config(
+                            points["GPS_LAT"].mean(), points["GPS_LON"].mean(), 10
+                        ),
+                        margin=dict(l=0, r=0, t=0, b=0),
+                        height=rsp_height(400),
+                    )
+                    st.plotly_chart(grid_fig, width="stretch", key="tab1_period_map")
+                    if pd.notna(period_avg_consumption):
+                        st.markdown(
+                            f"### {t('map_period_avg_consumption').format(value=f'{period_avg_consumption:.1f}')} {t('fuel_forecast_badge')}"
+                        )
+                    if freq == "D" and not fuel_df.empty:
+                        day_fuel = fuel_df[fuel_df["date"] == period_start.date()]
+                        for _, frow in day_fuel.iterrows():
+                            fuel_label = t("fuel_type_lpg") if frow["fuel_type"] == "lpg" else t("fuel_type_petrol")
+                            st.success(
+                                t("map_day_refuel_note").format(
+                                    fuel=fuel_label,
+                                    liters=f"{frow['liters']:.2f}",
+                                    price=f"{frow['price']:.2f}",
+                                )
+                            )
                 else:
-                    st.warning(t("soh_forecast_result").format(days=0, date=t("not_enough_data")))
-            else:
-                st.success(t("soh_forecast_stable"))
+                    st.info(t("no_gps_data"))
+            st.divider()
+            render_triplog_route_section(fastlog_df)
         else:
-            # Дельта напряжений пуста/полностью нулевая (BATTLOG/HVCHECKCELL
-            # не заполнены) — вместо общей фразы "недостаточно данных"
-            # даём конкретную инструкцию, что нужно сделать пользователю.
-            st.info(t("soh_no_data_hint"))
-    with dcol2:
-        st.markdown(f"**{t('radiator_forecast_title')}**")
-        if not temp_df.empty and "ambient_temp" in temp_df.columns and len(temp_df) >= 20:
-            df = temp_df.dropna(subset=["ambient_temp", "inverter_temp"]).copy()
-            if len(df) >= 20:
-                df["diff"] = df["inverter_temp"] - df["ambient_temp"]
-                x = (df["datetime"] - df["datetime"].min()).dt.total_seconds().to_numpy()
-                y = df["diff"].to_numpy()
-                slope, _ = np.polyfit(x, y, 1)
-                slope_per_month = slope * 86400 * 30
-                if slope_per_month > 0.5:
-                    st.warning(t("radiator_forecast_result").format(value=f"{slope_per_month:.1f}"))
-                else:
-                    st.success(t("radiator_forecast_stable"))
+            render_maps_locked_placeholder()
+
+    st.divider()
+
+    with st.expander(t("fuel_log_title"), expanded=False, icon=":material/local_gas_station:"):
+        _render_fuel_log_section(fuel_df)
+
+    st.divider()
+
+    with st.expander(t("expert_params_title"), expanded=False, icon=":material/science:"):
+        # --- Экспертные параметры ---
+        st.subheader(t("expert_params_title"))
+        ecol1, ecol2 = stacked_columns(2)
+        with ecol1:
+            st.markdown(f"**{t('ltft_title')}**")
+            ltft_post_lpg = trips_df.loc[trips_df.get("avg_ltft").notna(), "avg_ltft"] if "avg_ltft" in trips_df else pd.Series(dtype=float)
+            if not ltft_post_lpg.empty:
+                ltft_avg = ltft_post_lpg.mean()
+                st.metric("LTFT", f"{ltft_avg:.1f}%")
+                if ltft_avg < LTFT_WARNING_MIN or ltft_avg > LTFT_WARNING_MAX:
+                    st.warning(t("ltft_warning"))
             else:
                 st.info(t("not_enough_data"))
-        else:
-            st.info(t("not_enough_data"))
+        with ecol2:
+            st.markdown(f"**{t('hv_safety_title')}**")
+            st.info(t("hv_safety_no_data"))
 
-    st.markdown(f"**{t('maint_forecast_title')}**")
-    records = load_maintenance()
-    status_list, _current_mileage, lpg_active = compute_maintenance_status(db_path, file_version, records)
-    render_smart_maintenance_cards(status_list, lpg_active)
+    st.divider()
+
+    with st.expander(t("smart_diag_title"), expanded=False, icon=":material/insights:"):
+        # --- Smart Diagnostics ---
+        st.subheader(t("smart_diag_title"))
+        dcol1, dcol2 = stacked_columns(2)
+        with dcol1:
+            st.markdown(f"**{t('soh_forecast_title')}**")
+            valid_cell_df = (
+                cell_df.dropna(subset=["cell_delta"]).loc[cell_df["cell_delta"] != 0]
+                if not cell_df.empty
+                else cell_df
+            )
+            if len(valid_cell_df) >= 5:
+                x = (valid_cell_df["timestamp"] - valid_cell_df["timestamp"].min()).dt.total_seconds().to_numpy()
+                y = valid_cell_df["cell_delta"].to_numpy()
+                slope, intercept = np.polyfit(x, y, 1)
+                if slope > 0:
+                    seconds_to_critical = (SOH_DELTA_MAX - intercept) / slope - x.max()
+                    if seconds_to_critical > 0:
+                        days = int(seconds_to_critical / 86400)
+                        forecast_date = (valid_cell_df["timestamp"].max() + timedelta(seconds=seconds_to_critical)).strftime("%Y-%m-%d")
+                        st.warning(t("soh_forecast_result").format(days=days, date=forecast_date))
+                    else:
+                        st.warning(t("soh_forecast_result").format(days=0, date=t("not_enough_data")))
+                else:
+                    st.success(t("soh_forecast_stable"))
+            else:
+                # Дельта напряжений пуста/полностью нулевая (BATTLOG/HVCHECKCELL
+                # не заполнены) — вместо общей фразы "недостаточно данных"
+                # даём конкретную инструкцию, что нужно сделать пользователю.
+                st.info(t("soh_no_data_hint"))
+        with dcol2:
+            st.markdown(f"**{t('radiator_forecast_title')}**")
+            if not temp_df.empty and "ambient_temp" in temp_df.columns and len(temp_df) >= 20:
+                df = temp_df.dropna(subset=["ambient_temp", "inverter_temp"]).copy()
+                if len(df) >= 20:
+                    df["diff"] = df["inverter_temp"] - df["ambient_temp"]
+                    x = (df["datetime"] - df["datetime"].min()).dt.total_seconds().to_numpy()
+                    y = df["diff"].to_numpy()
+                    slope, _ = np.polyfit(x, y, 1)
+                    slope_per_month = slope * 86400 * 30
+                    if slope_per_month > 0.5:
+                        st.warning(t("radiator_forecast_result").format(value=f"{slope_per_month:.1f}"))
+                    else:
+                        st.success(t("radiator_forecast_stable"))
+                else:
+                    st.info(t("not_enough_data"))
+            else:
+                st.info(t("not_enough_data"))
+
+    with st.expander(t("maint_forecast_title"), expanded=False, icon=":material/build:"):
+        st.markdown(f"**{t('maint_forecast_title')}**")
+        records = load_maintenance()
+        status_list, _current_mileage, lpg_active = compute_maintenance_status(db_path, file_version, records)
+        render_smart_maintenance_cards(status_list, lpg_active)
 
 
 def _fmt_hms(seconds: float) -> str:
