@@ -1272,9 +1272,24 @@ def inject_responsive_css() -> None:
             border-bottom-color: rgba(90, 180, 255, 0.9);
             box-shadow: 0 3px 14px rgba(90, 180, 255, 0.16);
         }}
-        /* Сам кружок радио прячем — его роль берёт на себя подсветка. */
-        section[data-testid="stSidebar"] [role="radiogroup"] > label > div:first-child {{
+        /* Прячем сам переключатель: его роль берёт на себя подсветка.
+           Разметка Streamlit меняется от версии к версии, поэтому
+           убираем все дочерние элементы ярлыка, кроме последнего —
+           текста раздела. Так кружок исчезает независимо от того,
+           каким тегом он отрисован. */
+        section[data-testid="stSidebar"] [role="radiogroup"] > label > *:not(:last-child) {{
             display: none !important;
+        }}
+        section[data-testid="stSidebar"] [role="radiogroup"] input {{
+            display: none !important;
+        }}
+        section[data-testid="stSidebar"] [role="radiogroup"] > label > div:last-child {{
+            width: 100%;
+        }}
+        /* Подстраховка: если переключатель всё же отрисуется, он будет
+           в синей гамме приложения, а не фирменным красным Streamlit. */
+        section[data-testid="stSidebar"] [role="radiogroup"] {{
+            accent-color: #2f7fd4;
         }}
         /* Шапка с фотографией фары. Слева снимок затемнён — там лежит
            заголовок, поэтому текст читается без дополнительной плашки. */
