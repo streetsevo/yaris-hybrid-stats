@@ -241,8 +241,27 @@ TR = {
         "page_title": "Toyota Yaris 4 Hybrid — Диагностика",
         "app_title": "🚗 Toyota Yaris 4 Hybrid (2021) — Полная диагностика",
         "language_label": "Язык / Language",
+        "nav_section": "Раздел",
+        "app_header_title": "Панель диагностики",
         "refresh_db_button": "🔄 Обновить базу данных",
         "map_style_label": "Стиль карты",
+        "triplog_title": "🧭 Точная карта поездки (TripLog + телеметрия)",
+        "triplog_explainer": "Геометрия маршрута берётся из TripLog — у него нормальный GPS-трек. Режим EV/ДВС берётся из телеметрии Hybrid Assistant, где он известен всегда. Там, где телеметрии за нужный момент нет, участок помечается отдельным цветом, а не достраивается догадками.",
+        "triplog_upload_label": "Загрузите KML-экспорт маршрутов из TripLog",
+        "triplog_upload_help": "В TripLog: страница Trips → отметьте поездки → экспорт KML («route details»). Обычный отчёт на email не подойдёт — в нём нет геометрии маршрутов.",
+        "triplog_no_file": "Файл маршрутов не загружен.",
+        "triplog_parse_failed": "❌ В файле не найдено маршрутов. Убедитесь, что это KML-экспорт маршрутов TripLog, а не отчёт о пробеге.",
+        "triplog_loaded": "✅ Загружено маршрутов: {n}",
+        "triplog_select_route": "Маршрут",
+        "triplog_select_day": "День",
+        "triplog_drive_found": "✅ Автоматически загружено с Google Диска: {n} файл(ов) с маршрутами.",
+        "triplog_drive_none": "ℹ️ Файлов с маршрутами на Google Диске не найдено. Положите KML-экспорты в подпапку triplog рядом с базой данных — они будут подхватываться автоматически. Либо загрузите вручную ниже.",
+        "triplog_drive_list": "Показать список файлов с Google Диска",
+        "triplog_parsing": "Разбираю маршруты…",
+        "triplog_file_skipped": "⚠️ Пропущен файл «{name}»: маршрутов в нём не найдено.",
+        "triplog_no_overlap": "⚠️ Телеметрия за время этих маршрутов не найдена — весь трек будет помечен как «нет данных о режиме». Скорее всего, Hybrid Assistant в эти дни не записывал поездки, либо база ещё не обновилась.",
+        "triplog_offset_applied": "🕐 Обнаружено расхождение часов между TripLog и телеметрией: применён сдвиг {hours} ч (совпало {pct}% точек).",
+        "triplog_offset_none": "Часы совпадают, сдвиг не потребовался (совпало {pct}% точек).",
         "map_stadia_key_found": "🔑 Ключ Stadia найден в Secrets.",
         "map_stadia_key_missing": "🔑 Ключ Stadia не найден в Secrets. Проверьте имя параметра — оно должно быть ровно stadia_api_key.",
         "map_stadia_troubleshoot": "Если подложка не загружается даже с ключом — в личном кабинете Stadia добавьте домен приложения (*.streamlit.app) в список разрешённых для вашего проекта: браузерные запросы Stadia проверяет по домену.",
@@ -614,8 +633,27 @@ TR = {
         "page_title": "Toyota Yaris 4 Hybrid — Diagnostyka",
         "app_title": "🚗 Toyota Yaris 4 Hybrid (2021) — Pełna diagnostyka",
         "language_label": "Język / Язык",
+        "nav_section": "Sekcja",
+        "app_header_title": "Panel diagnostyczny",
         "refresh_db_button": "🔄 Odśwież bazę danych",
         "map_style_label": "Styl mapy",
+        "triplog_title": "🧭 Dokładna mapa przejazdu (TripLog + telemetria)",
+        "triplog_explainer": "Geometria trasy pochodzi z TripLog — tam ślad GPS jest poprawny. Tryb EV/silnik pochodzi z telemetrii Hybrid Assistant, gdzie jest znany zawsze. Tam, gdzie telemetrii na dany moment brak, odcinek oznaczany jest osobnym kolorem, a nie zgadywany.",
+        "triplog_upload_label": "Wgraj eksport tras KML z TripLog",
+        "triplog_upload_help": "W TripLog: strona Trips → zaznacz przejazdy → eksport KML („route details”). Zwykły raport wysyłany e-mailem nie zadziała — nie zawiera geometrii tras.",
+        "triplog_no_file": "Nie wgrano pliku z trasami.",
+        "triplog_parse_failed": "❌ W pliku nie znaleziono tras. Upewnij się, że to eksport KML tras z TripLog, a nie raport przebiegu.",
+        "triplog_loaded": "✅ Wczytano tras: {n}",
+        "triplog_select_route": "Trasa",
+        "triplog_select_day": "Dzień",
+        "triplog_drive_found": "✅ Automatycznie pobrano z Google Drive: {n} plik(ów) z trasami.",
+        "triplog_drive_none": "ℹ️ Nie znaleziono plików z trasami na Google Drive. Umieść eksporty KML w podfolderze triplog obok bazy danych — będą pobierane automatycznie. Albo wgraj ręcznie poniżej.",
+        "triplog_drive_list": "Pokaż listę plików z Google Drive",
+        "triplog_parsing": "Przetwarzam trasy…",
+        "triplog_file_skipped": "⚠️ Pominięto plik „{name}”: nie znaleziono w nim tras.",
+        "triplog_no_overlap": "⚠️ Nie znaleziono telemetrii z czasu tych tras — cały ślad zostanie oznaczony jako „brak danych o trybie”. Prawdopodobnie Hybrid Assistant nie zapisywał wtedy przejazdów albo baza nie została jeszcze odświeżona.",
+        "triplog_offset_applied": "🕐 Wykryto rozbieżność zegarów między TripLog a telemetrią: zastosowano przesunięcie {hours} h (dopasowano {pct}% punktów).",
+        "triplog_offset_none": "Zegary są zgodne, przesunięcie zbędne (dopasowano {pct}% punktów).",
         "map_stadia_key_found": "🔑 Klucz Stadia znaleziony w Secrets.",
         "map_stadia_key_missing": "🔑 Nie znaleziono klucza Stadia w Secrets. Sprawdź nazwę parametru — powinna brzmieć dokładnie stadia_api_key.",
         "map_stadia_troubleshoot": "Jeśli podkład nie ładuje się nawet z kluczem — w panelu Stadia dodaj domenę aplikacji (*.streamlit.app) do listy dozwolonych dla Twojego projektu: żądania z przeglądarki Stadia weryfikuje po domenie.",
@@ -1047,6 +1085,33 @@ def rsp_height(desktop_px: int) -> int:
 # экране решается через CSS (flex-wrap ниже), а не в Python.
 
 
+def stacked_columns(n: int):
+    """Колонки, которые на телефоне превращаются в вертикальный стек.
+
+    Нужно для блоков с длинным текстом: в узкой колонке абзац
+    вытягивается в «столбик» по два-три слова в строке и становится
+    нечитаемым. Возвращает контейнеры с тем же интерфейсом, что и
+    st.columns, поэтому вызывающий код не меняется."""
+    if is_mobile():
+        return [st.container() for _ in range(n)]
+    return st.columns(n)
+
+
+def render_app_header(section_title: str) -> None:
+    """Шапка с фотографией фары и названием текущего раздела."""
+    st.markdown(
+        f"""
+        <div class="app-header">
+          <div class="app-header-text">
+            <div class="app-header-title">{section_title}</div>
+            <div class="app-header-sub">Toyota Yaris 4 Hybrid</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def inject_responsive_css() -> None:
     """Немного CSS для аккуратного вида, особенно на телефоне:
     компактнее отступы, читаемые метрики, аккуратные вкладки и
@@ -1107,11 +1172,68 @@ def inject_responsive_css() -> None:
         [data-testid="stDataFrame"] {{
             overflow-x: auto;
         }}
+        /* Шапка с фотографией фары. Слева снимок затемнён — там лежит
+           заголовок, поэтому текст читается без дополнительной плашки. */
+        .app-header {{
+            position: relative;
+            height: 116px;
+            margin: 0 0 1.1rem 0;
+            border-radius: 16px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            border: 1px solid rgba(255, 120, 90, 0.16);
+            background-image:
+                linear-gradient(to right,
+                    rgba(10, 11, 14, 0.94) 0%,
+                    rgba(10, 11, 14, 0.72) 45%,
+                    rgba(10, 11, 14, 0.25) 100%),
+                url("data:image/webp;base64,{_HEADER_IMAGE_B64}");
+            background-size: cover;
+            background-position: center 55%;
+        }}
+        .app-header-text {{ padding: 0 1.15rem; }}
+        .app-header-title {{
+            color: #f2f5fa;
+            font-size: 1.32rem;
+            font-weight: 650;
+            letter-spacing: 0.01em;
+            line-height: 1.2;
+            text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9);
+        }}
+        .app-header-sub {{
+            color: #b9c4d2;
+            font-size: 0.78rem;
+            margin-top: 3px;
+            opacity: 0.85;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+        }}
+
+        /* Карточки метрик в том же «стеклянном» ключе, что и экран кода. */
+        [data-testid="stMetric"] {{
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: border-color 220ms ease, background 220ms ease;
+        }}
+        [data-testid="stMetric"]:hover {{
+            border-color: rgba(120, 200, 255, 0.30) !important;
+        }}
+        [data-testid="stExpander"] details {{
+            background: rgba(255, 255, 255, 0.028);
+            border: 1px solid rgba(140, 160, 200, 0.14) !important;
+            border-radius: 12px !important;
+        }}
+        [data-testid="stExpander"] summary:hover {{
+            color: #9fd0ff;
+        }}
+
         /* На узком экране ряд из 4-5 метрик сжимается до нечитаемых
            колонок в пару символов шириной. Разрешаем колонкам переноситься
            и задаём минимальную ширину — получается аккуратная сетка
            по две метрики в ряд вместо пяти сплющенных. */
         @media (max-width: 640px) {{
+            .app-header {{ height: 96px; }}
+            .app-header-title {{ font-size: 1.12rem; }}
             [data-testid="stHorizontalBlock"] {{
                 flex-wrap: wrap !important;
                 gap: 0.4rem !important;
@@ -2485,6 +2607,11 @@ DEFAULT_MAP_STYLE = "carto-darkmatter"
 # диалогом, а не подгружается с задержкой.
 _HERO_IMAGE_B64 = "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"
 
+# Баннер шапки приложения: фото задней фары (авторское), кадрировано
+# в горизонтальную полосу. Тёмная левая часть оставлена под заголовок.
+# Снимок тёмный, поэтому WebP ужимает его всего до ~8 КБ.
+_HEADER_IMAGE_B64 = "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"
+
 # Имя секрета могло быть записано по-разному — принимаем несколько
 # распространённых вариантов, чтобы ключ не «терялся» молча.
 _STADIA_SECRET_NAMES = ("stadia_api_key", "STADIA_API_KEY", "stadia_key", "stadiamaps_api_key")
@@ -3089,7 +3216,10 @@ def render_sidebar():
 
 
 _MAP_PARAM_COLORS = {
-    "mode": {"EV": "#FFC800", "ICE": "#E30000"},
+    # Цвета режима как в TripLog: EV — синий, ДВС — чёрный.
+    # На тёмных подложках чёрный сливается с картой, поэтому там он
+    # подменяется светлым (см. _mode_colors_for_current_style).
+    "mode": {"EV": "#1477C7", "ICE": "#000000"},
     "braking": {"friction": "#E30000", "regen": "#2CA02C", "none": "#9AA0A6"},
     "speed": {"low": "#2CA02C", "medium": "#FF8C00", "high": "#E30000"},
     "soc": {"low": "#E30000", "medium": "#FF8C00", "high": "#2CA02C"},
@@ -3116,6 +3246,207 @@ _MAP_LEGEND_ITEMS = {
         ("high", {"ru": "Заряд > 70%", "pl": "Ładunek > 70%"}),
     ],
 }
+
+
+
+_DARK_MAP_STYLES = {"carto-darkmatter", "alidade-smooth-dark"}
+
+
+def _mode_colors_for_current_style() -> dict:
+    """Цвета режима EV/ДВС с поправкой на тему подложки.
+    Чёрная линия на тёмной карте попросту не видна, поэтому там вместо
+    чёрного берём светло-серый — визуально это тот же «не-EV», но
+    различимый."""
+    colors = dict(_MAP_PARAM_COLORS["mode"])
+    if get_selected_map_style() in _DARK_MAP_STYLES:
+        colors["ICE"] = "#E8ECF2"
+    return colors
+
+
+# ============================================================
+# МАРШРУТЫ ИЗ TRIPLOG (KML) + СШИВКА С ТЕЛЕМЕТРИЕЙ
+# ============================================================
+# Идея: у двух источников ломается разное. У Hybrid Assistant почти
+# половина GPS-точек «залипает» при движении, но режим EV/ДВС известен
+# всегда. У TripLog наоборот — нормальная геометрия трека, но нет
+# сведений о работе двигателя. Сшиваем их по ВРЕМЕНИ.
+#
+# В KML геометрия лежит в <LineString> без отметок времени, а рядом
+# идут отдельные точки <Point> с метками примерно каждые 5 минут.
+# Поэтому время для каждой вершины трека получаем интерполяцией между
+# ближайшими опорными точками пропорционально пройденному расстоянию.
+
+
+# Допуск при сопоставлении точки трека с телеметрией. Телеметрия пишется
+# примерно раз в 2.6 секунды, так что 15 секунд с запасом покрывают
+# нормальную запись, но не дают «притянуть» режим из совсем другого
+# момента поездки.
+TELEMETRY_MATCH_TOLERANCE_S = 15
+
+
+def _haversine_m(lat1, lon1, lat2, lon2):
+    r = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(min(1.0, a)))
+
+
+def _cumulative_distance_m(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
+    """Накопленное расстояние вдоль трека, векторизованно.
+    На больших выгрузках (сотни тысяч точек) поэлементный цикл в Python
+    занимал бы десятки секунд, тогда как numpy справляется за миллисекунды."""
+    if len(lat) < 2:
+        return np.zeros(len(lat))
+    p1 = np.radians(lat[:-1]); p2 = np.radians(lat[1:])
+    dp = p2 - p1
+    dl = np.radians(lon[1:] - lon[:-1])
+    a = np.sin(dp / 2) ** 2 + np.cos(p1) * np.cos(p2) * np.sin(dl / 2) ** 2
+    seg = 2 * 6371000.0 * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
+    return np.concatenate([[0.0], np.cumsum(seg)])
+
+
+def _parse_kml_time(value: str):
+    """KML от TripLog пишет время в нестандартном виде 07.09.2026T20:56:00Z.
+    Суффикс Z означает UTC, поэтому приводим к местному времени — в базе
+    Hybrid Assistant время тоже местное."""
+    try:
+        naive = datetime.strptime(value.strip(), "%d.%m.%YT%H:%M:%SZ")
+    except ValueError:
+        try:
+            naive = datetime.strptime(value.strip(), "%Y-%m-%dT%H:%M:%SZ")
+        except ValueError:
+            return None
+    utc = pd.Timestamp(naive, tz="UTC")
+    return utc.tz_convert(LOCAL_TIMEZONE).tz_localize(None)
+
+
+_KML_PLACEMARK_RE = re.compile(r"<Placemark>(.*?)</Placemark>", re.DOTALL)
+_KML_NAME_RE = re.compile(r"<name>([^<]*)</name>")
+_KML_WHEN_RE = re.compile(r"<when>([^<]+)</when>")
+_KML_COORDS_RE = re.compile(r"<coordinates>([^<]+)</coordinates>")
+
+
+@st.cache_data(show_spinner=False)
+def parse_triplog_kml(file_bytes: bytes) -> list:
+    """Разбирает KML-экспорт TripLog. Возвращает список маршрутов:
+    {name, points: DataFrame(lat, lon, dist_m, datetime)}.
+
+    Разбор идёт по порядку элементов в файле: TripLog выкладывает
+    точки с отметками времени непосредственно ПЕРЕД линией своего
+    маршрута. Привязывать их по близости координат нельзя — по одним
+    и тем же улицам ездишь каждый день, и к маршруту цеплялись метки
+    от совершенно других поездок."""
+    try:
+        text = file_bytes.decode("utf-8", errors="replace")
+    except Exception:
+        return []
+
+    routes = []
+    pending_anchors = []
+
+    for mark in _KML_PLACEMARK_RE.findall(text):
+        coord_match = _KML_COORDS_RE.search(mark)
+        if not coord_match:
+            continue
+
+        if "route_style" in mark:
+            when = _KML_WHEN_RE.search(mark)
+            ts = _parse_kml_time(when.group(1)) if when else None
+            parts = coord_match.group(1).strip().split(",")
+            if ts is not None and len(parts) >= 2:
+                pending_anchors.append((float(parts[1]), float(parts[0]), ts))
+            continue
+
+        if "line_style" not in mark:
+            continue
+
+        coords = []
+        for token in coord_match.group(1).split():
+            parts = token.split(",")
+            if len(parts) >= 2:
+                coords.append((float(parts[1]), float(parts[0])))
+        anchors, pending_anchors = pending_anchors, []
+        if len(coords) < 2:
+            continue
+
+        df = pd.DataFrame(coords, columns=["lat", "lon"])
+        df["dist_m"] = _cumulative_distance_m(df["lat"].to_numpy(), df["lon"].to_numpy())
+        df["datetime"] = _assign_times_from_anchors(df, anchors)
+
+        name_match = _KML_NAME_RE.search(mark)
+        routes.append(
+            {"name": (name_match.group(1).strip() if name_match else "?"), "points": df}
+        )
+    return routes
+
+
+def _assign_times_from_anchors(df: pd.DataFrame, anchors: list) -> pd.Series:
+    """Присваивает каждой вершине трека время. Опорные точки с метками
+    привязываются к ближайшей вершине, между ними время распределяется
+    пропорционально пройденному расстоянию (то есть предполагается
+    равномерная скорость только на коротком участке между метками,
+    а не на всём маршруте)."""
+    times = pd.Series(pd.NaT, index=df.index, dtype="datetime64[ns]")
+    if not anchors:
+        return times
+
+    lat = df["lat"].to_numpy()
+    lon = df["lon"].to_numpy()
+    for a_lat, a_lon, a_time in anchors:
+        d = np.sqrt((lat - a_lat) ** 2 + (lon - a_lon) ** 2)
+        idx = int(np.argmin(d))
+        # Метка должна лежать на этом треке, а не на соседнем маршруте:
+        # ~0.0015 градуса это примерно 150 метров.
+        if d[idx] < 0.0015:
+            times.iloc[idx] = a_time
+
+    known = times.dropna()
+    if len(known) < 2:
+        return times
+
+    # Линейная интерполяция по накопленному расстоянию.
+    interp = np.interp(
+        df["dist_m"].to_numpy(),
+        df.loc[known.index, "dist_m"].to_numpy(),
+        known.astype("int64").to_numpy(),
+        left=np.nan,
+        right=np.nan,
+    )
+    return pd.Series(pd.to_datetime(interp, errors="coerce"), index=df.index)
+
+
+def match_route_with_telemetry(route_points: pd.DataFrame, fastlog: pd.DataFrame) -> pd.DataFrame:
+    """Для каждой вершины трека находит ближайшую по времени запись
+    телеметрии и берёт оттуда режим EV/ДВС. Там, где телеметрии нет
+    (Hybrid Assistant не работал или разрыв в записи), режим помечается
+    как unknown — это честнее, чем достраивать его догадками."""
+    out = route_points.copy()
+    out["mode"] = "unknown"
+    if fastlog.empty or out["datetime"].isna().all():
+        return out
+
+    telemetry = fastlog.dropna(subset=["datetime"]).sort_values("datetime")
+    if telemetry.empty:
+        return out
+    telemetry = telemetry.assign(datetime=telemetry["datetime"].astype("datetime64[ns]"))
+    out["datetime"] = out["datetime"].astype("datetime64[ns]")
+
+    valid = out["datetime"].notna()
+    if not valid.any():
+        return out
+
+    matched = pd.merge_asof(
+        out.loc[valid, ["datetime"]].sort_values("datetime").reset_index(),
+        telemetry[["datetime", "mode"]].rename(columns={"mode": "tel_mode"}),
+        on="datetime",
+        direction="nearest",
+        tolerance=pd.Timedelta(seconds=TELEMETRY_MATCH_TOLERANCE_S),
+    ).set_index("index")
+
+    out.loc[matched.index, "mode"] = matched["tel_mode"].fillna("unknown")
+    return out
 
 
 def _drop_frozen_gps_samples(df: pd.DataFrame) -> pd.DataFrame:
@@ -3152,7 +3483,11 @@ def _categorize_for_map(df: pd.DataFrame, parameter: str) -> pd.Series:
 
 def _render_map_legend(parameter: str) -> None:
     lang = st.session_state.get("lang", "pl")
-    color_map = _MAP_PARAM_COLORS.get(parameter, {})
+    color_map = (
+        _mode_colors_for_current_style()
+        if parameter == "mode"
+        else _MAP_PARAM_COLORS.get(parameter, {})
+    )
     items = _MAP_LEGEND_ITEMS.get(parameter, [])
     swatches = "".join(
         f'<span style="display:inline-flex;align-items:center;margin-right:18px;">'
@@ -3175,7 +3510,11 @@ def _build_route_map_figure(trip_log: pd.DataFrame, parameter: str = "mode") -> 
         return fig
 
     points["_category"] = _categorize_for_map(points, parameter)
-    color_map = _MAP_PARAM_COLORS.get(parameter, _MAP_PARAM_COLORS["mode"])
+    color_map = (
+        _mode_colors_for_current_style()
+        if parameter == "mode"
+        else _MAP_PARAM_COLORS.get(parameter, _MAP_PARAM_COLORS["mode"])
+    )
 
     seg_start = 0
     for i in range(1, len(points) + 1):
@@ -3273,7 +3612,7 @@ def render_smart_maintenance_cards(status_list: list, lpg_active: bool) -> None:
         "lpg_valves": {"ru": "ГБО: клапаны", "pl": "LPG: zawory"},
     }
 
-    cols = st.columns(5)
+    cols = stacked_columns(5)
     with cols[0]:
         _render_single_maintenance_item(by_key.get("oil"), titles["oil"][lang])
     with cols[1]:
@@ -3367,6 +3706,181 @@ def _render_fuel_log_section(fuel_df: pd.DataFrame) -> None:
     else:
         st.info(t("not_enough_data"))
     st.caption(t("fuel_real_badge_note"))
+
+
+_TRIPLOG_MODE_LEGEND = {
+    "EV": {"ru": "EV (ДВС выключен)", "pl": "EV (silnik wyłączony)"},
+    "ICE": {"ru": "ДВС работает", "pl": "Silnik pracuje"},
+    "unknown": {"ru": "Нет данных о режиме", "pl": "Brak danych o trybie"},
+}
+
+
+def _best_time_offset(routes: list, fastlog: pd.DataFrame) -> "tuple[int, float]":
+    """Подбирает сдвиг времени между TripLog и телеметрией.
+
+    KML помечает время суффиксом Z (UTC), но приложения не всегда пишут
+    его честно. Если ошибиться на пару часов, вся раскраска станет
+    правдоподобной, но неверной — поэтому сдвиг подбирается по факту:
+    берётся тот, при котором совпало больше всего точек.
+    Возвращает (сдвиг в часах, доля совпавших точек)."""
+    if fastlog.empty or not routes:
+        return 0, 0.0
+    telemetry = fastlog.dropna(subset=["datetime"]).sort_values("datetime")
+    if telemetry.empty:
+        return 0, 0.0
+
+    all_times = pd.concat([r["points"]["datetime"] for r in routes]).dropna()
+    if all_times.empty:
+        return 0, 0.0
+    # Для определения сдвига достаточно выборки: перебирать сотни тысяч
+    # точек по семь раз незачем, а на нескольких тысячах ответ тот же.
+    if len(all_times) > 4000:
+        all_times = all_times.sample(4000, random_state=0)
+    all_times = all_times.astype("datetime64[ns]")
+    telemetry = telemetry.assign(datetime=telemetry["datetime"].astype("datetime64[ns]"))
+
+    best_offset, best_rate = 0, 0.0
+    for offset in range(-3, 4):
+        shifted = (all_times + pd.Timedelta(hours=offset)).sort_values()
+        merged = pd.merge_asof(
+            pd.DataFrame({"datetime": shifted}),
+            telemetry[["datetime", "mode"]].rename(columns={"mode": "m"}),
+            on="datetime",
+            direction="nearest",
+            tolerance=pd.Timedelta(seconds=TELEMETRY_MATCH_TOLERANCE_S),
+        )
+        rate = merged["m"].notna().mean()
+        if rate > best_rate:
+            best_offset, best_rate = offset, float(rate)
+    return best_offset, best_rate
+
+
+def render_triplog_route_section(fastlog: pd.DataFrame) -> None:
+    """Точная карта поездки: геометрия из TripLog, режим EV/ДВС из
+    телеметрии Hybrid Assistant, отдельный цвет там, где режим неизвестен."""
+    st.subheader(t("triplog_title"))
+    st.caption(t("triplog_explainer"))
+
+    # Сначала показываем, что уже нашлось на Google Диске автоматически.
+    drive_files = get_triplog_files_from_drive()
+    if drive_files:
+        st.success(t("triplog_drive_found").format(n=len(drive_files)))
+        with st.expander(t("triplog_drive_list"), expanded=False):
+            for f in drive_files:
+                st.markdown(f"- `{f.name}`")
+    else:
+        st.info(t("triplog_drive_none"))
+
+    st.file_uploader(
+        t("triplog_upload_label"), type=["kml"], key="triplog_uploader",
+        accept_multiple_files=True, help=t("triplog_upload_help"),
+    )
+
+    all_files = get_all_triplog_files()
+    if not all_files:
+        st.info(t("triplog_no_file"))
+        return
+
+    routes = []
+    failed = []
+    with st.spinner(t("triplog_parsing")):
+        for f in all_files:
+            try:
+                parsed = parse_triplog_kml(f.getvalue())
+            except Exception:
+                parsed = []
+            if parsed:
+                routes.extend(parsed)
+            else:
+                failed.append(f.name)
+
+    if not routes:
+        st.error(t("triplog_parse_failed"))
+        return
+    st.success(t("triplog_loaded").format(n=len(routes)))
+    for name in failed:
+        st.warning(t("triplog_file_skipped").format(name=name))
+
+    offset, rate = _best_time_offset(routes, fastlog)
+    if rate < 0.05:
+        st.warning(t("triplog_no_overlap"))
+    elif offset != 0:
+        st.info(t("triplog_offset_applied").format(hours=offset, pct=f"{rate*100:.0f}"))
+    else:
+        st.caption(t("triplog_offset_none").format(pct=f"{rate*100:.0f}"))
+
+    # Название маршрута начинается с даты ("08.09.2026 Business 4,7 km"),
+    # поэтому сначала сужаем выбор по дню — иначе в списке оказываются
+    # тысячи пунктов и найти нужную поездку невозможно.
+    by_date = {}
+    for i, r in enumerate(routes):
+        day = r["name"].split()[0] if r["name"] else "?"
+        by_date.setdefault(day, []).append(i)
+
+    def _day_key(d):
+        try:
+            return datetime.strptime(d, "%d.%m.%Y")
+        except ValueError:
+            return datetime.min
+
+    days = sorted(by_date.keys(), key=_day_key, reverse=True)
+    chosen_day = st.selectbox(t("triplog_select_day"), days, key="triplog_day_select")
+    day_routes = by_date[chosen_day]
+    labels = {i: routes[i]["name"] for i in day_routes}
+    idx = st.selectbox(
+        t("triplog_select_route"), list(labels.keys()),
+        format_func=lambda i: labels[i], key="triplog_route_select",
+    )
+    points = routes[idx]["points"].copy()
+    if offset:
+        points["datetime"] = points["datetime"] + pd.Timedelta(hours=offset)
+    matched = match_route_with_telemetry(points, fastlog)
+
+    lang = st.session_state.get("lang", "pl")
+    mode_colors = _mode_colors_for_current_style()
+    colors = {
+        "EV": mode_colors["EV"],
+        "ICE": mode_colors["ICE"],
+        "unknown": "#8A8F98",
+    }
+
+    fig = go.Figure()
+    # Рисуем сплошными отрезками одного режима, чтобы линия не рвалась.
+    start = 0
+    for i in range(1, len(matched) + 1):
+        if i == len(matched) or matched["mode"].iloc[i] != matched["mode"].iloc[start]:
+            seg = matched.iloc[start : i + (1 if i < len(matched) else 0)]
+            mode = matched["mode"].iloc[start]
+            fig.add_trace(
+                go.Scattermap(
+                    lat=seg["lat"], lon=seg["lon"], mode="lines",
+                    line=dict(width=5, color=colors.get(mode, "#8A8F98")),
+                    showlegend=False, hoverinfo="skip",
+                )
+            )
+            start = i
+
+    fig.update_layout(
+        map=build_map_config(matched["lat"].mean(), matched["lon"].mean(), 12),
+        margin=dict(l=0, r=0, t=0, b=0),
+        height=rsp_height(460),
+    )
+    st.plotly_chart(fig, width="stretch", key="triplog_route_map")
+
+    swatches = "".join(
+        f'<span style="display:inline-flex;align-items:center;margin-right:18px;">'
+        f'<span style="width:14px;height:14px;background:{colors[k]};display:inline-block;'
+        f'border-radius:3px;margin-right:6px;"></span>{_TRIPLOG_MODE_LEGEND[k][lang]}</span>'
+        for k in ("EV", "ICE", "unknown")
+    )
+    st.markdown(f'<div style="margin-top:6px;">{swatches}</div>', unsafe_allow_html=True)
+
+    counts = matched["mode"].value_counts()
+    total = len(matched)
+    c1, c2, c3 = st.columns(3)
+    c1.metric(_TRIPLOG_MODE_LEGEND["EV"][lang], f"{counts.get('EV', 0) / total * 100:.0f}%")
+    c2.metric(_TRIPLOG_MODE_LEGEND["ICE"][lang], f"{counts.get('ICE', 0) / total * 100:.0f}%")
+    c3.metric(_TRIPLOG_MODE_LEGEND["unknown"][lang], f"{counts.get('unknown', 0) / total * 100:.0f}%")
 
 
 def render_trip_weather_section(trip_row, trip_log: pd.DataFrame) -> None:
@@ -3634,6 +4148,8 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
                         )
             else:
                 st.info(t("no_gps_data"))
+        st.divider()
+        render_triplog_route_section(fastlog_df)
     else:
         render_maps_locked_placeholder()
 
@@ -3645,7 +4161,7 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
 
     # --- Экспертные параметры ---
     st.subheader(t("expert_params_title"))
-    ecol1, ecol2 = st.columns(2)
+    ecol1, ecol2 = stacked_columns(2)
     with ecol1:
         st.markdown(f"**{t('ltft_title')}**")
         ltft_post_lpg = trips_df.loc[trips_df.get("avg_ltft").notna(), "avg_ltft"] if "avg_ltft" in trips_df else pd.Series(dtype=float)
@@ -3664,7 +4180,7 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
 
     # --- Smart Diagnostics ---
     st.subheader(t("smart_diag_title"))
-    dcol1, dcol2 = st.columns(2)
+    dcol1, dcol2 = stacked_columns(2)
     with dcol1:
         st.markdown(f"**{t('soh_forecast_title')}**")
         valid_cell_df = (
@@ -4684,6 +5200,35 @@ def find_ha_report_htmls(folder_path: str) -> list:
     return sorted(found)
 
 
+def find_triplog_kml_files(folder_path: str) -> list:
+    """Ищет KML-маршруты TripLog в скачанной папке Google Диска.
+    Обходятся и вложенные папки, поэтому достаточно положить файлы в
+    подпапку triplog рядом с базой — скачивание через Drive API
+    забирает вложенные папки целиком."""
+    found = []
+    for root, _dirs, files in os.walk(folder_path):
+        for fname in files:
+            if fname.lower().endswith(".kml"):
+                found.append(os.path.join(root, fname))
+    return sorted(found)
+
+
+def get_triplog_files_from_drive() -> list:
+    try:
+        return [LocalReportFile(p) for p in find_triplog_kml_files(LOCAL_DB_FOLDER_PATH)]
+    except Exception:
+        return []
+
+
+def get_all_triplog_files() -> list:
+    """Все доступные KML: скачанные с Google Диска и загруженные вручную.
+    При совпадении имён приоритет у загруженного вручную."""
+    manual = list(st.session_state.get("triplog_uploader") or [])
+    manual_names = {f.name for f in manual}
+    from_drive = [f for f in get_triplog_files_from_drive() if f.name not in manual_names]
+    return manual + from_drive
+
+
 def get_ha_files_from_drive() -> list:
     """HTML-отчёты, автоматически скачанные вместе с базой данных."""
     try:
@@ -5362,7 +5907,9 @@ def render_tab5(db_path, file_version):
             help=t("invoice_upload_help"),
         )
         if uploaded_invoice is not None:
-            preview_col, result_col = st.columns([1, 2])
+            preview_col, result_col = (
+                stacked_columns(2) if is_mobile() else st.columns([1, 2])
+            )
             with preview_col:
                 st.image(uploaded_invoice, caption=uploaded_invoice.name, width="stretch")
 
@@ -5501,11 +6048,24 @@ def main():
 
     render_sidebar()
 
-    st.title(t("app_title"))
+    tab_keys = ["tab1", "tab2", "tab3", "tab4", "tab5"]
+    tab_titles = [t(k) for k in tab_keys]
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        [t("tab1"), t("tab2"), t("tab3"), t("tab4"), t("tab5")]
-    )
+    # На телефоне пять вкладок сверху не помещаются и обрезаются, поэтому
+    # там навигация уезжает в боковую панель, а на экране остаётся только
+    # выбранный раздел. На широком экране вкладки удобнее — оставляем их.
+    mobile_nav = is_mobile()
+    if mobile_nav:
+        st.sidebar.divider()
+        selected_title = st.sidebar.radio(
+            t("nav_section"), tab_titles, key="mobile_section", label_visibility="collapsed"
+        )
+        active = tab_titles.index(selected_title)
+        render_app_header(selected_title)
+    else:
+        render_app_header(t("app_header_title"))
+        tabs = st.tabs(tab_titles)
+        active = None
 
     trips_df = pd.DataFrame()
     fastlog_df = pd.DataFrame()
@@ -5555,50 +6115,39 @@ def main():
         except Exception:
             fuel_df = pd.DataFrame()
 
-    with tab1:
-        if not db_ok:
-            # Именно if/else, а не тернарное выражение: у Streamlit включена
-            # "магия", которая сама выводит значение выражения-инструкции, а
-            # st.warning() возвращает DeltaGenerator — и на экран попадала его
-            # документация вместо сообщения об ошибке.
-            if db_missing:
-                st.warning(t("db_missing"))
-            else:
-                st.error(t("db_error").format(error=db_error_message))
+    def _db_problem() -> bool:
+        """Сообщение о проблеме с базой. True, если раздел рисовать нельзя."""
+        if db_ok:
+            return False
+        if db_missing:
+            st.warning(t("db_missing"))
         else:
-            render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, fuel_df)
+            st.error(t("db_error").format(error=db_error_message))
+        return True
 
-    with tab2:
-        if not db_ok:
-            # Именно if/else, а не тернарное выражение: у Streamlit включена
-            # "магия", которая сама выводит значение выражения-инструкции, а
-            # st.warning() возвращает DeltaGenerator — и на экран попадала его
-            # документация вместо сообщения об ошибке.
-            if db_missing:
-                st.warning(t("db_missing"))
-            else:
-                st.error(t("db_error").format(error=db_error_message))
+    def _render_section(index: int) -> None:
+        if index == 0:
+            if not _db_problem():
+                render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, fuel_df)
+        elif index == 1:
+            if not _db_problem():
+                render_tab2(trips_df, fastlog_df, db_path, file_version)
+        elif index == 2:
+            render_tab3()
+        elif index == 3:
+            if not _db_problem():
+                render_tab4(trips_df, temp_df, cell_df, fuel_df)
         else:
-            render_tab2(trips_df, fastlog_df, db_path, file_version)
+            render_tab5(db_path, file_version)
 
-    with tab3:
-        render_tab3()
-
-    with tab4:
-        if not db_ok:
-            # Именно if/else, а не тернарное выражение: у Streamlit включена
-            # "магия", которая сама выводит значение выражения-инструкции, а
-            # st.warning() возвращает DeltaGenerator — и на экран попадала его
-            # документация вместо сообщения об ошибке.
-            if db_missing:
-                st.warning(t("db_missing"))
-            else:
-                st.error(t("db_error").format(error=db_error_message))
-        else:
-            render_tab4(trips_df, temp_df, cell_df, fuel_df)
-
-    with tab5:
-        render_tab5(db_path, file_version)
+    if mobile_nav:
+        # Рисуем только выбранный раздел: на телефоне это ещё и заметно
+        # быстрее, чем считать все пять сразу, как делают вкладки.
+        _render_section(active)
+    else:
+        for i, tab in enumerate(tabs):
+            with tab:
+                _render_section(i)
 
 
 if __name__ == "__main__":
