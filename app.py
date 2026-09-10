@@ -280,6 +280,7 @@ TR = {
         # --- Вкладки ---
         "tab1": "📊 Аналитика и Диагностика",
         "tab2": "📈 Детальные логи",
+        "tab_triplog": "🧭 TripLog: маршруты",
         "tab3": "🔋 Мониторинг Dr. Prius",
         "tab4": "⚖️ Сравнение и тренды",
         "tab5": "🔧 Техническое обслуживание",
@@ -316,6 +317,14 @@ TR = {
         "map_period_month": "Месяц",
         "map_period_year": "Год",
         "map_period_avg_consumption": "Средний расход за период: {value} л/100км",
+        "map_period_distance_odo": "Пробег по одометру",
+        "map_period_distance_odo_help": "Одометр читается напрямую с автомобиля по OBD — это весь реально пройденный путь за период, включая поездки, которые Hybrid Assistant не записывал.",
+        "map_period_distance_logged": "Из них записано",
+        "map_period_distance_logged_help": "Сумма дистанций поездок, которые Hybrid Assistant успел зафиксировать. Он пишет только когда запущен и подключён к OBD-адаптеру.",
+        "map_period_gap_note": "За период {km} км пройдено без записи Hybrid Assistant — приложение в это время не было подключено. На карте и в расчётах расхода эти километры не учтены.",
+        "map_period_trips": "Поездок за период",
+        "triplog_day_distance": "Пробег за день",
+        "triplog_day_trips": "Поездок за день",
         "fuel_forecast_badge": "🔮 (прогноз)",
         "unit_kmh": "км/ч",
         "unit_l100km": "л/100км",
@@ -672,6 +681,7 @@ TR = {
         "not_enough_data": "Za mało danych do obliczeń.",
         "tab1": "📊 Analityka i Diagnostyka",
         "tab2": "📈 Szczegółowe logi",
+        "tab_triplog": "🧭 TripLog: trasy",
         "tab3": "🔋 Monitorowanie Dr. Prius",
         "tab4": "⚖️ Porównanie i trendy",
         "tab5": "🔧 Przeglądy techniczne",
@@ -705,6 +715,14 @@ TR = {
         "map_period_month": "Miesiąc",
         "map_period_year": "Rok",
         "map_period_avg_consumption": "Średnie spalanie w okresie: {value} l/100km",
+        "map_period_distance_odo": "Przebieg wg licznika",
+        "map_period_distance_odo_help": "Licznik odczytywany jest bezpośrednio z auta przez OBD — to cała rzeczywiście przejechana droga w okresie, łącznie z przejazdami, których Hybrid Assistant nie zapisał.",
+        "map_period_distance_logged": "W tym zapisane",
+        "map_period_distance_logged_help": "Suma dystansów przejazdów, które Hybrid Assistant zdążył zarejestrować. Zapisuje tylko wtedy, gdy jest uruchomiony i połączony z adapterem OBD.",
+        "map_period_gap_note": "W tym okresie {km} km przejechano bez zapisu Hybrid Assistant — aplikacja nie była wtedy połączona. Te kilometry nie są uwzględnione na mapie ani w obliczeniach spalania.",
+        "map_period_trips": "Przejazdów w okresie",
+        "triplog_day_distance": "Przebieg w dniu",
+        "triplog_day_trips": "Przejazdów w dniu",
         "fuel_forecast_badge": "🔮 (prognoza)",
         "unit_kmh": "km/h",
         "unit_l100km": "l/100km",
@@ -3353,6 +3371,7 @@ def _parse_kml_time(value: str):
 
 _KML_PLACEMARK_RE = re.compile(r"<Placemark>(.*?)</Placemark>", re.DOTALL)
 _KML_NAME_RE = re.compile(r"<name>([^<]*)</name>")
+_KML_DISTANCE_RE = re.compile(r"([\d]+[.,]?[\d]*)\s*km\s*$", re.IGNORECASE)
 _KML_WHEN_RE = re.compile(r"<when>([^<]+)</when>")
 _KML_COORDS_RE = re.compile(r"<coordinates>([^<]+)</coordinates>")
 
@@ -3405,9 +3424,17 @@ def parse_triplog_kml(file_bytes: bytes) -> list:
         df["datetime"] = _assign_times_from_anchors(df, anchors)
 
         name_match = _KML_NAME_RE.search(mark)
-        routes.append(
-            {"name": (name_match.group(1).strip() if name_match else "?"), "points": df}
-        )
+        name = name_match.group(1).strip() if name_match else "?"
+        km_match = _KML_DISTANCE_RE.search(name)
+        distance_km = None
+        if km_match:
+            try:
+                distance_km = float(km_match.group(1).replace(",", "."))
+            except ValueError:
+                distance_km = None
+        if distance_km is None:
+            distance_km = float(df["dist_m"].iloc[-1]) / 1000.0
+        routes.append({"name": name, "points": df, "distance_km": distance_km})
     return routes
 
 
@@ -3853,6 +3880,15 @@ def render_triplog_route_section(fastlog: pd.DataFrame) -> None:
     days = sorted(by_date.keys(), key=_day_key, reverse=True)
     chosen_day = st.selectbox(t("triplog_select_day"), days, key="triplog_day_select")
     day_routes = by_date[chosen_day]
+
+    # Пробег берём из данных самого TripLog: он считает его по полному
+    # GPS-треку, тогда как сумма отрезков прореженной полилинии на карте
+    # занижает результат примерно на 2%.
+    day_km = sum(routes[i].get("distance_km") or 0.0 for i in day_routes)
+    dc1, dc2 = st.columns(2)
+    dc1.metric(t("triplog_day_distance"), f"{day_km:.1f} {t('unit_km')}")
+    dc2.metric(t("triplog_day_trips"), f"{len(day_routes)}")
+
     labels = {i: routes[i]["name"] for i in day_routes}
     idx = st.selectbox(
         t("triplog_select_route"), list(labels.keys()),
@@ -4029,6 +4065,16 @@ def _compass_label(degrees: float, lang: str) -> str:
     return names[int((float(degrees) + 22.5) % 360 // 45)]
 
 
+def render_tab_triplog(fastlog_df) -> None:
+    """Отдельная вкладка TripLog. Сшивка маршрутов с телеметрией
+    Hybrid Assistant сохранена — она и есть смысл раздела; из главной
+    вкладки блок убран, чтобы не занимать там место."""
+    if not maps_are_unlocked():
+        render_maps_locked_placeholder()
+        return
+    render_triplog_route_section(fastlog_df)
+
+
 def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, fuel_df):
     if trips_df.empty:
         st.info(t("no_trip_data"))
@@ -4139,6 +4185,19 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
                 period_df = _filter_gps_outliers(period_df)
                 period_trips = trips_df[trips_df["date"] >= period_start]
                 period_avg_consumption = period_trips["consumption"].mean()
+                period_distance = period_trips["distance"].sum()
+
+                # Одометр ODO читается напрямую с машины по OBD, поэтому его
+                # прирост — это ВЕСЬ реально пройденный путь за период,
+                # включая поездки, которые Hybrid Assistant не записал
+                # (он пишет только когда запущен и подключён к адаптеру).
+                period_odo = pd.to_numeric(
+                    period_df["ODO"], errors="coerce"
+                ).dropna() if "ODO" in period_df.columns else pd.Series(dtype=float)
+                odo_distance = (
+                    float(period_odo.max() - period_odo.min())
+                    if len(period_odo) >= 2 else None
+                )
 
                 points = period_df.dropna(subset=["GPS_LAT", "GPS_LON"])
                 if not points.empty:
@@ -4159,6 +4218,27 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
                         height=rsp_height(400),
                     )
                     st.plotly_chart(grid_fig, width="stretch", key="tab1_period_map")
+                    pc1, pc2, pc3 = st.columns(3)
+                    pc1.metric(
+                        t("map_period_distance_odo"),
+                        (f"{odo_distance:,.0f}".replace(",", " ") + f" {t('unit_km')}")
+                        if odo_distance is not None else "—",
+                        help=t("map_period_distance_odo_help"),
+                    )
+                    pc2.metric(
+                        t("map_period_distance_logged"),
+                        f"{period_distance:,.1f}".replace(",", " ") + f" {t('unit_km')}",
+                        help=t("map_period_distance_logged_help"),
+                    )
+                    pc3.metric(t("map_period_trips"), f"{len(period_trips)}")
+                    if odo_distance is not None and period_distance > 0:
+                        gap = odo_distance - period_distance
+                        if gap > max(5.0, odo_distance * 0.05):
+                            st.caption(
+                                t("map_period_gap_note").format(
+                                    km=f"{gap:,.0f}".replace(",", " ")
+                                )
+                            )
                     if pd.notna(period_avg_consumption):
                         st.markdown(
                             f"### {t('map_period_avg_consumption').format(value=f'{period_avg_consumption:.1f}')} {t('fuel_forecast_badge')}"
@@ -4176,8 +4256,6 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
                             )
                 else:
                     st.info(t("no_gps_data"))
-            st.divider()
-            render_triplog_route_section(fastlog_df)
         else:
             render_maps_locked_placeholder()
 
@@ -6080,7 +6158,7 @@ def main():
 
     render_sidebar()
 
-    tab_keys = ["tab1", "tab2", "tab3", "tab4", "tab5"]
+    tab_keys = ["tab1", "tab2", "tab_triplog", "tab3", "tab4", "tab5"]
     tab_titles = [t(k) for k in tab_keys]
 
     # На телефоне пять вкладок сверху не помещаются и обрезаются, поэтому
@@ -6158,15 +6236,19 @@ def main():
         return True
 
     def _render_section(index: int) -> None:
-        if index == 0:
+        key = tab_keys[index]
+        if key == "tab1":
             if not _db_problem():
                 render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, fuel_df)
-        elif index == 1:
+        elif key == "tab2":
             if not _db_problem():
                 render_tab2(trips_df, fastlog_df, db_path, file_version)
-        elif index == 2:
+        elif key == "tab_triplog":
+            if not _db_problem():
+                render_tab_triplog(fastlog_df)
+        elif key == "tab3":
             render_tab3()
-        elif index == 3:
+        elif key == "tab4":
             if not _db_problem():
                 render_tab4(trips_df, temp_df, cell_df, fuel_df)
         else:
