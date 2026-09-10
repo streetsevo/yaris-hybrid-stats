@@ -493,6 +493,7 @@ TR = {
         "drprius_upload_help": "Можно загрузить сразу несколько файлов за разные месяцы.",
         "drprius_no_files": "Файлы Dr. Prius ещё не загружены.",
         "drprius_parse_error": "⚠️ Не удалось распознать формат файла {name}: не найдены столбцы с сопротивлением/напряжением по блокам. Проверьте, что заголовки колонок содержат слово resistance/opór и voltage/napięcie с номером блока.",
+        "drprius_blocks_group": "Показатели по блокам ВВБ",
         "drprius_resistance_chart": "Внутреннее сопротивление по блокам (мОм)",
         "drprius_voltage_chart": "Напряжение по блокам (мВ)",
         "drprius_wear_title": "Прогноз износа ячеек",
@@ -516,6 +517,7 @@ TR = {
         "compare_metric_delta": "Макс. дельта напряжений, В",
         "compare_metric_peak_temp": "Пиковая температура ВВБ, °C",
         "compare_metric_ah": "Ёмкость Ah (заводская, справочно)",
+        "compare_trends_group": "Исторические тренды",
         "compare_trend_soh": "Тренд SOH во времени",
         "compare_trend_delta": "Рост дельты напряжений во времени",
         "compare_trend_seasonal": "Сезонное сравнение температур ВВБ (лето к лету)",
@@ -888,6 +890,7 @@ TR = {
         "drprius_upload_help": "Można wgrać od razu kilka plików za różne miesiące.",
         "drprius_no_files": "Pliki Dr. Prius nie zostały jeszcze wgrane.",
         "drprius_parse_error": "⚠️ Nie udało się rozpoznać formatu pliku {name}: brak kolumn z rezystancją/napięciem dla bloków. Sprawdź, czy nagłówki zawierają słowo resistance/opór oraz voltage/napięcie z numerem bloku.",
+        "drprius_blocks_group": "Wskaźniki wg bloków baterii HV",
         "drprius_resistance_chart": "Rezystancja wewnętrzna wg bloków (mOhm)",
         "drprius_voltage_chart": "Napięcie wg bloków (mV)",
         "drprius_wear_title": "Prognoza zużycia ogniw",
@@ -910,6 +913,7 @@ TR = {
         "compare_metric_delta": "Maks. delta napięć, V",
         "compare_metric_peak_temp": "Szczytowa temperatura HV, °C",
         "compare_metric_ah": "Pojemność Ah (fabryczna, orientacyjnie)",
+        "compare_trends_group": "Trendy historyczne",
         "compare_trend_soh": "Trend SOH w czasie",
         "compare_trend_delta": "Wzrost delty napięć w czasie",
         "compare_trend_seasonal": "Sezonowe porównanie temperatur HV (lato do lata)",
@@ -5052,70 +5056,73 @@ def render_tab3():
     voltages = [latest_blocks[b].get("voltage") for b in block_nums]
     temps = [latest_blocks[b].get("temp") for b in block_nums]
 
-    if any(r is not None for r in resistances):
-        st.markdown(f"#### {t('drprius_resistance_chart')}")
-        fig_r = go.Figure(go.Bar(x=[f"#{b}" for b in block_nums], y=resistances, marker_color="#ff7f0e"))
-        fig_r.update_layout(height=rsp_height(350))
-        st.plotly_chart(fig_r, width="stretch", key="tab3_resistance_chart")
+    with st.expander(t("drprius_blocks_group"), expanded=True, icon=":material/bar_chart:"):
+        if any(r is not None for r in resistances):
+            st.markdown(f"#### {t('drprius_resistance_chart')}")
+            fig_r = go.Figure(go.Bar(x=[f"#{b}" for b in block_nums], y=resistances, marker_color="#ff7f0e"))
+            fig_r.update_layout(height=rsp_height(350))
+            st.plotly_chart(fig_r, width="stretch", key="tab3_resistance_chart")
 
-    if any(v is not None for v in voltages):
-        st.markdown(f"#### {t('drprius_voltage_chart')}")
-        fig_v = go.Figure(go.Bar(x=[f"#{b}" for b in block_nums], y=voltages, marker_color="#2ca02c"))
-        fig_v.update_layout(height=rsp_height(350))
-        st.plotly_chart(fig_v, width="stretch", key="tab3_voltage_chart")
+        if any(v is not None for v in voltages):
+            st.markdown(f"#### {t('drprius_voltage_chart')}")
+            fig_v = go.Figure(go.Bar(x=[f"#{b}" for b in block_nums], y=voltages, marker_color="#2ca02c"))
+            fig_v.update_layout(height=rsp_height(350))
+            st.plotly_chart(fig_v, width="stretch", key="tab3_voltage_chart")
 
     st.divider()
-    st.markdown(f"#### {t('drprius_wear_title')}")
-    months_sorted = list(all_blocks_by_month.keys())
-    if len(months_sorted) < 2:
-        st.info(t("drprius_need_two_months"))
-    else:
-        common_blocks = set.intersection(
-            *[set(all_blocks_by_month[m].keys()) for m in months_sorted]
-        )
-        slopes = {}
-        for b in common_blocks:
-            series = [all_blocks_by_month[m][b].get("resistance") for m in months_sorted]
-            if any(v is None or pd.isna(v) for v in series):
-                continue
-            slope = np.polyfit(range(len(series)), series, 1)[0]
-            slopes[b] = slope
-        if slopes:
-            median_slope = float(np.median(list(slopes.values())))
-            fast_blocks = [b for b, s in slopes.items() if s > median_slope * 1.5 and s > 0]
-            if fast_blocks:
-                st.warning(t("drprius_wear_result").format(blocks=", ".join(f"#{b}" for b in fast_blocks)))
+    with st.expander(t("drprius_wear_title"), expanded=False, icon=":material/trending_down:"):
+        st.markdown(f"#### {t('drprius_wear_title')}")
+        months_sorted = list(all_blocks_by_month.keys())
+        if len(months_sorted) < 2:
+            st.info(t("drprius_need_two_months"))
+        else:
+            common_blocks = set.intersection(
+                *[set(all_blocks_by_month[m].keys()) for m in months_sorted]
+            )
+            slopes = {}
+            for b in common_blocks:
+                series = [all_blocks_by_month[m][b].get("resistance") for m in months_sorted]
+                if any(v is None or pd.isna(v) for v in series):
+                    continue
+                slope = np.polyfit(range(len(series)), series, 1)[0]
+                slopes[b] = slope
+            if slopes:
+                median_slope = float(np.median(list(slopes.values())))
+                fast_blocks = [b for b, s in slopes.items() if s > median_slope * 1.5 and s > 0]
+                if fast_blocks:
+                    st.warning(t("drprius_wear_result").format(blocks=", ".join(f"#{b}" for b in fast_blocks)))
+                else:
+                    st.success(t("drprius_wear_ok"))
             else:
-                st.success(t("drprius_wear_ok"))
+                st.info(t("not_enough_data"))
+
+    st.divider()
+    with st.expander(t("drprius_temp_spread_title"), expanded=False, icon=":material/thermostat:"):
+        st.markdown(f"#### {t('drprius_temp_spread_title')}")
+        if any(v is not None for v in temps):
+            valid_temps = [v for v in temps if v is not None and pd.notna(v)]
+            if len(valid_temps) >= 2:
+                spread = max(valid_temps) - min(valid_temps)
+                if spread > 5:
+                    st.warning(t("drprius_temp_spread_warning").format(value=f"{spread:.1f}"))
+                else:
+                    st.success(t("drprius_temp_spread_ok").format(value=f"{spread:.1f}"))
+            else:
+                st.info(t("not_enough_data"))
         else:
             st.info(t("not_enough_data"))
 
-    st.divider()
-    st.markdown(f"#### {t('drprius_temp_spread_title')}")
-    if any(v is not None for v in temps):
-        valid_temps = [v for v in temps if v is not None and pd.notna(v)]
-        if len(valid_temps) >= 2:
-            spread = max(valid_temps) - min(valid_temps)
-            if spread > 5:
-                st.warning(t("drprius_temp_spread_warning").format(value=f"{spread:.1f}"))
-            else:
-                st.success(t("drprius_temp_spread_ok").format(value=f"{spread:.1f}"))
-        else:
-            st.info(t("not_enough_data"))
-    else:
-        st.info(t("not_enough_data"))
 
-
-# ============================================================
-# HTML-ОТЧЁТЫ HYBRID ASSISTANT (для трендов, которых нет в БД)
-# ============================================================
-# Почти все показатели самого отчёта уже честно вычисляются из
-# hybridassistant.db (см. compute_trip_report) и совпадают с отчётом
-# почти до знака. Но несколько фирменных расчётов Hybrid Assistant НЕ
-# хранятся как отдельные колонки в базе и есть только в готовом виде
-# в HTML-отчёте: разбивка SOC по источникам заряда (рекуперация /
-# накат / ДВС), индекс и тип наката (Glide) и итоговая оценка стиля
-# вождения. Именно их мы вытаскиваем из HTML для отслеживания трендов.
+    # ============================================================
+    # HTML-ОТЧЁТЫ HYBRID ASSISTANT (для трендов, которых нет в БД)
+    # ============================================================
+    # Почти все показатели самого отчёта уже честно вычисляются из
+    # hybridassistant.db (см. compute_trip_report) и совпадают с отчётом
+    # почти до знака. Но несколько фирменных расчётов Hybrid Assistant НЕ
+    # хранятся как отдельные колонки в базе и есть только в готовом виде
+    # в HTML-отчёте: разбивка SOC по источникам заряда (рекуперация /
+    # накат / ДВС), индекс и тип наката (Glide) и итоговая оценка стиля
+    # вождения. Именно их мы вытаскиваем из HTML для отслеживания трендов.
 
 def _ha_section_tables(soup: BeautifulSoup, section_id: str) -> list:
     """Возвращает все <table> между <h2 id=section_id> и следующим <h2>."""
@@ -5588,190 +5595,193 @@ def _render_password_gate(
 
 
 def render_tab4(trips_df, temp_df, cell_df, fuel_df):
-    st.markdown(f"#### {t('compare_table_title')}")
+    with st.expander(t("compare_table_title"), expanded=True, icon=":material/compare_arrows:"):
+        st.markdown(f"#### {t('compare_table_title')}")
 
-    dr_files = st.session_state.get("drprius_uploader")
-    dr_parsed = load_dr_prius_files(dr_files) if dr_files else {}
-    dr_months = {
-        os.path.splitext(fname)[0]: blocks
-        for fname, blocks in dr_parsed.items()
-        if blocks is not None
-    }
-
-    if not temp_df.empty:
-        temp_df = temp_df.copy()
-        temp_df["month"] = temp_df["datetime"].dt.strftime("%Y-%m")
-        available_months = sorted(temp_df["month"].dropna().unique())
-    else:
-        available_months = []
-
-    if not available_months:
-        st.info(t("not_enough_data"))
-        return
-
-    selected_month = st.selectbox(t("compare_select_month"), available_months, index=len(available_months) - 1)
-
-    ha_peak_temp = temp_df.loc[temp_df["month"] == selected_month, "battery_temp"].max()
-
-    ha_soh = None
-    ha_delta = None
-    if not cell_df.empty:
-        cell_df_m = cell_df.copy()
-        cell_df_m["month"] = cell_df_m["timestamp"].dt.strftime("%Y-%m")
-        month_cells = cell_df_m.loc[cell_df_m["month"] == selected_month, "cell_delta"]
-        if not month_cells.empty:
-            ha_delta = month_cells.max()
-            ha_soh = calculate_soh(ha_delta)
-
-    dr_blocks = dr_months.get(selected_month)
-    dr_voltages = None
-    if dr_blocks:
-        vals = [b.get("voltage") for b in dr_blocks.values() if b.get("voltage") is not None]
-        if vals:
-            dr_voltages = (max(vals) - min(vals)) / 1000.0  # мВ -> В
-
-    rows = []
-
-    def _fmt(v, suffix=""):
-        return f"{v:.2f}{suffix}" if v is not None and pd.notna(v) else t("compare_na")
-
-    soh_diff_flag = (
-        t("compare_diff_high")
-        if ha_soh is not None and dr_voltages is not None and abs(ha_soh - 100) > SOH_DIFF_THRESHOLD
-        else t("compare_diff_ok")
-    )
-    rows.append(
-        {
-            t("compare_col_metric"): t("compare_metric_soh"),
-            t("compare_col_ha"): _fmt(ha_soh),
-            t("compare_col_drprius"): t("compare_na"),
-            t("compare_col_diff_flag"): t("compare_na") if dr_voltages is None else soh_diff_flag,
+        dr_files = st.session_state.get("drprius_uploader")
+        dr_parsed = load_dr_prius_files(dr_files) if dr_files else {}
+        dr_months = {
+            os.path.splitext(fname)[0]: blocks
+            for fname, blocks in dr_parsed.items()
+            if blocks is not None
         }
-    )
 
-    delta_diff_flag = (
-        t("compare_diff_high")
-        if ha_delta is not None and dr_voltages is not None and abs(ha_delta - dr_voltages) > DELTA_V_DIFF_THRESHOLD
-        else t("compare_diff_ok")
-    )
-    rows.append(
-        {
-            t("compare_col_metric"): t("compare_metric_delta"),
-            t("compare_col_ha"): _fmt(ha_delta),
-            t("compare_col_drprius"): _fmt(dr_voltages),
-            t("compare_col_diff_flag"): t("compare_na") if dr_voltages is None else delta_diff_flag,
-        }
-    )
-
-    rows.append(
-        {
-            t("compare_col_metric"): t("compare_metric_peak_temp"),
-            t("compare_col_ha"): _fmt(ha_peak_temp),
-            t("compare_col_drprius"): t("compare_na"),
-            t("compare_col_diff_flag"): t("compare_na"),
-        }
-    )
-
-    rows.append(
-        {
-            t("compare_col_metric"): t("compare_metric_ah"),
-            t("compare_col_ha"): f"{FACTORY_AH_CAPACITY_REFERENCE:.1f} Ah",
-            t("compare_col_drprius"): t("compare_na"),
-            t("compare_col_diff_flag"): t("compare_na"),
-        }
-    )
-
-    df_compare = pd.DataFrame(rows)
-
-    def _highlight(row):
-        color = "color: red; font-weight: bold" if row[t("compare_col_diff_flag")] == t("compare_diff_high") else ""
-        return [color] * len(row)
-
-    st.dataframe(df_compare.style.apply(_highlight, axis=1), width="stretch", hide_index=True)
-
-    st.divider()
-
-    if not cell_df.empty:
-        st.markdown(f"#### {t('compare_trend_soh')}")
-        soh_series = cell_df["cell_delta"].apply(calculate_soh)
-        fig_soh = go.Figure(go.Scatter(x=cell_df["timestamp"], y=soh_series, mode="lines+markers"))
-        fig_soh.update_layout(height=rsp_height(300), yaxis_title="SOH %")
-        st.plotly_chart(fig_soh, width="stretch", key="tab4_soh_trend")
-
-        st.markdown(f"#### {t('compare_trend_delta')}")
-        fig_delta = go.Figure(go.Scatter(x=cell_df["timestamp"], y=cell_df["cell_delta"], mode="lines+markers"))
-        fig_delta.update_layout(height=rsp_height(300), yaxis_title="Delta, В")
-        st.plotly_chart(fig_delta, width="stretch", key="tab4_delta_trend")
-    else:
-        st.info(t("no_cell_data"))
-
-    st.markdown(f"#### {t('compare_trend_seasonal')}")
-    if not temp_df.empty:
-        years_present = temp_df["datetime"].dt.year.nunique()
-        if years_present < 2:
-            st.info(t("compare_seasonal_not_enough"))
+        if not temp_df.empty:
+            temp_df = temp_df.copy()
+            temp_df["month"] = temp_df["datetime"].dt.strftime("%Y-%m")
+            available_months = sorted(temp_df["month"].dropna().unique())
         else:
-            seasonal = temp_df.copy()
-            seasonal["year"] = seasonal["datetime"].dt.year
-            seasonal["month_num"] = seasonal["datetime"].dt.month
-            summer = seasonal[seasonal["month_num"].isin([6, 7, 8])]
-            pivot = summer.groupby(["year", "month_num"])["battery_temp"].mean().reset_index()
-            fig_season = go.Figure()
-            for yr in sorted(pivot["year"].unique()):
-                sub = pivot[pivot["year"] == yr]
-                fig_season.add_trace(go.Scatter(x=sub["month_num"], y=sub["battery_temp"], name=str(yr), mode="lines+markers"))
-            fig_season.update_layout(height=rsp_height(300), xaxis_title="Месяц", yaxis_title="°C ВВБ")
-            st.plotly_chart(fig_season, width="stretch", key="tab4_seasonal_chart")
-    else:
-        st.info(t("not_enough_data"))
+            available_months = []
 
-    # --- Fuelio: реальный расход LPG во времени (по чекам АЗС) ---
+        if not available_months:
+            st.info(t("not_enough_data"))
+            return
+
+        selected_month = st.selectbox(t("compare_select_month"), available_months, index=len(available_months) - 1)
+
+        ha_peak_temp = temp_df.loc[temp_df["month"] == selected_month, "battery_temp"].max()
+
+        ha_soh = None
+        ha_delta = None
+        if not cell_df.empty:
+            cell_df_m = cell_df.copy()
+            cell_df_m["month"] = cell_df_m["timestamp"].dt.strftime("%Y-%m")
+            month_cells = cell_df_m.loc[cell_df_m["month"] == selected_month, "cell_delta"]
+            if not month_cells.empty:
+                ha_delta = month_cells.max()
+                ha_soh = calculate_soh(ha_delta)
+
+        dr_blocks = dr_months.get(selected_month)
+        dr_voltages = None
+        if dr_blocks:
+            vals = [b.get("voltage") for b in dr_blocks.values() if b.get("voltage") is not None]
+            if vals:
+                dr_voltages = (max(vals) - min(vals)) / 1000.0  # мВ -> В
+
+        rows = []
+
+        def _fmt(v, suffix=""):
+            return f"{v:.2f}{suffix}" if v is not None and pd.notna(v) else t("compare_na")
+
+        soh_diff_flag = (
+            t("compare_diff_high")
+            if ha_soh is not None and dr_voltages is not None and abs(ha_soh - 100) > SOH_DIFF_THRESHOLD
+            else t("compare_diff_ok")
+        )
+        rows.append(
+            {
+                t("compare_col_metric"): t("compare_metric_soh"),
+                t("compare_col_ha"): _fmt(ha_soh),
+                t("compare_col_drprius"): t("compare_na"),
+                t("compare_col_diff_flag"): t("compare_na") if dr_voltages is None else soh_diff_flag,
+            }
+        )
+
+        delta_diff_flag = (
+            t("compare_diff_high")
+            if ha_delta is not None and dr_voltages is not None and abs(ha_delta - dr_voltages) > DELTA_V_DIFF_THRESHOLD
+            else t("compare_diff_ok")
+        )
+        rows.append(
+            {
+                t("compare_col_metric"): t("compare_metric_delta"),
+                t("compare_col_ha"): _fmt(ha_delta),
+                t("compare_col_drprius"): _fmt(dr_voltages),
+                t("compare_col_diff_flag"): t("compare_na") if dr_voltages is None else delta_diff_flag,
+            }
+        )
+
+        rows.append(
+            {
+                t("compare_col_metric"): t("compare_metric_peak_temp"),
+                t("compare_col_ha"): _fmt(ha_peak_temp),
+                t("compare_col_drprius"): t("compare_na"),
+                t("compare_col_diff_flag"): t("compare_na"),
+            }
+        )
+
+        rows.append(
+            {
+                t("compare_col_metric"): t("compare_metric_ah"),
+                t("compare_col_ha"): f"{FACTORY_AH_CAPACITY_REFERENCE:.1f} Ah",
+                t("compare_col_drprius"): t("compare_na"),
+                t("compare_col_diff_flag"): t("compare_na"),
+            }
+        )
+
+        df_compare = pd.DataFrame(rows)
+
+        def _highlight(row):
+            color = "color: red; font-weight: bold" if row[t("compare_col_diff_flag")] == t("compare_diff_high") else ""
+            return [color] * len(row)
+
+        st.dataframe(df_compare.style.apply(_highlight, axis=1), width="stretch", hide_index=True)
+
     st.divider()
-    st.subheader(t("fuel_trend_health_title"))
-    if fuel_df.empty:
-        st.info(t("fuel_log_no_data"))
-    else:
-        lpg_df = fuel_df[(fuel_df["fuel_type"] == "lpg") & fuel_df["consumption_l100"].notna()].sort_values("date")
-        if len(lpg_df) >= 3:
-            fig = go.Figure(
-                go.Scatter(x=lpg_df["date"], y=lpg_df["consumption_l100"], mode="lines+markers", name=t("fuel_type_lpg"))
-            )
-            fig.update_layout(height=rsp_height(300), yaxis_title=t("unit_l100km"))
-            st.plotly_chart(fig, width="stretch", key="tab4_fuel_lpg_trend")
-            st.caption(t("fuel_real_badge_note"))
 
-            x = (pd.to_datetime(lpg_df["date"]) - pd.to_datetime(lpg_df["date"]).min()).dt.total_seconds().to_numpy()
-            slope_per_month = np.polyfit(x, lpg_df["consumption_l100"].to_numpy(), 1)[0] * 86400 * 30
-            if slope_per_month > 0.3:
-                st.warning(t("fuel_lpg_trend_warn").format(value=f"{slope_per_month:.2f}"))
+    with st.expander(t("compare_trends_group"), expanded=False, icon=":material/trending_up:"):
+        if not cell_df.empty:
+            st.markdown(f"#### {t('compare_trend_soh')}")
+            soh_series = cell_df["cell_delta"].apply(calculate_soh)
+            fig_soh = go.Figure(go.Scatter(x=cell_df["timestamp"], y=soh_series, mode="lines+markers"))
+            fig_soh.update_layout(height=rsp_height(300), yaxis_title="SOH %")
+            st.plotly_chart(fig_soh, width="stretch", key="tab4_soh_trend")
+
+            st.markdown(f"#### {t('compare_trend_delta')}")
+            fig_delta = go.Figure(go.Scatter(x=cell_df["timestamp"], y=cell_df["cell_delta"], mode="lines+markers"))
+            fig_delta.update_layout(height=rsp_height(300), yaxis_title="Delta, В")
+            st.plotly_chart(fig_delta, width="stretch", key="tab4_delta_trend")
+        else:
+            st.info(t("no_cell_data"))
+
+        st.markdown(f"#### {t('compare_trend_seasonal')}")
+        if not temp_df.empty:
+            years_present = temp_df["datetime"].dt.year.nunique()
+            if years_present < 2:
+                st.info(t("compare_seasonal_not_enough"))
             else:
-                st.success(t("fuel_lpg_trend_ok"))
+                seasonal = temp_df.copy()
+                seasonal["year"] = seasonal["datetime"].dt.year
+                seasonal["month_num"] = seasonal["datetime"].dt.month
+                summer = seasonal[seasonal["month_num"].isin([6, 7, 8])]
+                pivot = summer.groupby(["year", "month_num"])["battery_temp"].mean().reset_index()
+                fig_season = go.Figure()
+                for yr in sorted(pivot["year"].unique()):
+                    sub = pivot[pivot["year"] == yr]
+                    fig_season.add_trace(go.Scatter(x=sub["month_num"], y=sub["battery_temp"], name=str(yr), mode="lines+markers"))
+                fig_season.update_layout(height=rsp_height(300), xaxis_title="Месяц", yaxis_title="°C ВВБ")
+                st.plotly_chart(fig_season, width="stretch", key="tab4_seasonal_chart")
         else:
             st.info(t("not_enough_data"))
 
-        # Сверка: прогноз ЭБУ (из базы) vs реальный расход (по чекам), по месяцам
-        if not trips_df.empty and "consumption" in trips_df.columns:
-            db_monthly = trips_df.dropna(subset=["consumption"]).copy()
-            db_monthly["month"] = db_monthly["date"].dt.strftime("%Y-%m")
-            db_monthly = db_monthly.groupby("month")["consumption"].mean().reset_index()
+        # --- Fuelio: реальный расход LPG во времени (по чекам АЗС) ---
+    st.divider()
+    with st.expander(t("fuel_trend_health_title"), expanded=False, icon=":material/local_gas_station:"):
+        st.subheader(t("fuel_trend_health_title"))
+        if fuel_df.empty:
+            st.info(t("fuel_log_no_data"))
+        else:
+            lpg_df = fuel_df[(fuel_df["fuel_type"] == "lpg") & fuel_df["consumption_l100"].notna()].sort_values("date")
+            if len(lpg_df) >= 3:
+                fig = go.Figure(
+                    go.Scatter(x=lpg_df["date"], y=lpg_df["consumption_l100"], mode="lines+markers", name=t("fuel_type_lpg"))
+                )
+                fig.update_layout(height=rsp_height(300), yaxis_title=t("unit_l100km"))
+                st.plotly_chart(fig, width="stretch", key="tab4_fuel_lpg_trend")
+                st.caption(t("fuel_real_badge_note"))
 
-            fuel_monthly = fuel_df[fuel_df["consumption_l100"].notna()].copy()
-            fuel_monthly["month"] = pd.to_datetime(fuel_monthly["date"]).dt.strftime("%Y-%m")
-            fuel_monthly = fuel_monthly.groupby(["month", "fuel_type"])["consumption_l100"].mean().reset_index()
+                x = (pd.to_datetime(lpg_df["date"]) - pd.to_datetime(lpg_df["date"]).min()).dt.total_seconds().to_numpy()
+                slope_per_month = np.polyfit(x, lpg_df["consumption_l100"].to_numpy(), 1)[0] * 86400 * 30
+                if slope_per_month > 0.3:
+                    st.warning(t("fuel_lpg_trend_warn").format(value=f"{slope_per_month:.2f}"))
+                else:
+                    st.success(t("fuel_lpg_trend_ok"))
+            else:
+                st.info(t("not_enough_data"))
 
-            if not db_monthly.empty and not fuel_monthly.empty:
-                st.markdown(f"**{t('fuel_crosscheck_title')}**")
-                fig2 = go.Figure()
-                fig2.add_trace(go.Scatter(x=db_monthly["month"], y=db_monthly["consumption"], name=f"{t('rep_fuel_consumption')} {t('fuel_forecast_badge')}", mode="lines+markers"))
-                for ftype, label_key in (("lpg", "fuel_type_lpg"), ("petrol", "fuel_type_petrol")):
-                    sub = fuel_monthly[fuel_monthly["fuel_type"] == ftype]
-                    if not sub.empty:
-                        fig2.add_trace(go.Scatter(x=sub["month"], y=sub["consumption_l100"], name=f"{t(label_key)} {t('fuel_real_badge')}", mode="lines+markers"))
-                fig2.update_layout(height=rsp_height(320), yaxis_title=t("unit_l100km"), legend=dict(orientation="h"))
-                st.plotly_chart(fig2, width="stretch", key="tab4_fuel_crosscheck")
-                st.caption(t("fuel_crosscheck_note"))
+            # Сверка: прогноз ЭБУ (из базы) vs реальный расход (по чекам), по месяцам
+            if not trips_df.empty and "consumption" in trips_df.columns:
+                db_monthly = trips_df.dropna(subset=["consumption"]).copy()
+                db_monthly["month"] = db_monthly["date"].dt.strftime("%Y-%m")
+                db_monthly = db_monthly.groupby("month")["consumption"].mean().reset_index()
 
-    # --- HTML-отчёты Hybrid Assistant: доп. тренды, которых нет в БД ---
+                fuel_monthly = fuel_df[fuel_df["consumption_l100"].notna()].copy()
+                fuel_monthly["month"] = pd.to_datetime(fuel_monthly["date"]).dt.strftime("%Y-%m")
+                fuel_monthly = fuel_monthly.groupby(["month", "fuel_type"])["consumption_l100"].mean().reset_index()
+
+                if not db_monthly.empty and not fuel_monthly.empty:
+                    st.markdown(f"**{t('fuel_crosscheck_title')}**")
+                    fig2 = go.Figure()
+                    fig2.add_trace(go.Scatter(x=db_monthly["month"], y=db_monthly["consumption"], name=f"{t('rep_fuel_consumption')} {t('fuel_forecast_badge')}", mode="lines+markers"))
+                    for ftype, label_key in (("lpg", "fuel_type_lpg"), ("petrol", "fuel_type_petrol")):
+                        sub = fuel_monthly[fuel_monthly["fuel_type"] == ftype]
+                        if not sub.empty:
+                            fig2.add_trace(go.Scatter(x=sub["month"], y=sub["consumption_l100"], name=f"{t(label_key)} {t('fuel_real_badge')}", mode="lines+markers"))
+                    fig2.update_layout(height=rsp_height(320), yaxis_title=t("unit_l100km"), legend=dict(orientation="h"))
+                    st.plotly_chart(fig2, width="stretch", key="tab4_fuel_crosscheck")
+                    st.caption(t("fuel_crosscheck_note"))
+
+        # --- HTML-отчёты Hybrid Assistant: доп. тренды, которых нет в БД ---
     st.divider()
     st.subheader(t("ha_reports_title"))
     st.caption(t("ha_reports_explainer"))
@@ -5781,7 +5791,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
     drive_files = get_ha_files_from_drive()
     if drive_files:
         st.success(t("ha_reports_drive_found").format(n=len(drive_files)))
-        with st.expander(t("ha_reports_drive_list"), expanded=False):
+        with st.expander(t("ha_reports_drive_list"), expanded=False, icon=":material/folder:"):
             for f in drive_files:
                 st.markdown(f"- `{f.name}`")
     else:
@@ -5823,7 +5833,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
 
     if ok_rows:
         st.success(t("ha_reports_upload_success").format(n=len(ok_rows)))
-        with st.expander(t("ha_reports_details"), expanded=False):
+        with st.expander(t("ha_reports_details"), expanded=False, icon=":material/checklist:"):
             summary = pd.DataFrame(
                 [
                     {
@@ -5852,7 +5862,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
         return
 
     # --- Карты из HTML-отчётов ---
-    with st.expander(t("ha_maps_title"), expanded=False):
+    with st.expander(t("ha_maps_title"), expanded=False, icon=":material/map:"):
         st.caption(t("ha_maps_explainer"))
         if not maps_are_unlocked():
             render_maps_locked_placeholder()
@@ -5899,7 +5909,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
         else:
             st.success(t(ok_key))
 
-    with st.expander(t("ha_trend_soc_title"), expanded=True):
+    with st.expander(t("ha_trend_soc_title"), expanded=True, icon=":material/battery_charging_full:"):
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=reports_df["finish"], y=reports_df.get("soc_gained_brakings"), name=t("ha_soc_brakings"), mode="lines+markers"))
         fig.add_trace(go.Scatter(x=reports_df["finish"], y=reports_df.get("soc_gained_coasting"), name=t("ha_soc_coasting"), mode="lines+markers"))
@@ -5910,7 +5920,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
         if "soc_gained_brakings" in reports_df.columns:
             _trend_check(reports_df["soc_gained_brakings"], reports_df["finish"], "ha_trend_brakings_warn", "ha_trend_brakings_ok")
 
-    with st.expander(t("ha_trend_glide_title")):
+    with st.expander(t("ha_trend_glide_title"), icon=":material/air:"):
         if "glide_score" in reports_df.columns:
             fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["glide_score"], mode="lines+markers"))
             fig.update_layout(height=rsp_height(300), yaxis_title=t("ha_glide_score"))
@@ -5920,7 +5930,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
         else:
             st.info(t("not_enough_data"))
 
-    with st.expander(t("ha_trend_driver_title")):
+    with st.expander(t("ha_trend_driver_title"), icon=":material/person:"):
         c1, c2 = st.columns(2)
         with c1:
             if "accel_nervousness" in reports_df.columns:
@@ -5934,7 +5944,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
                 st.plotly_chart(fig, width="stretch", key="tab4_ha_braking_efficiency")
         st.caption(t("ha_trend_driver_note"))
 
-    with st.expander(t("ha_bsfc_crosscheck_title")):
+    with st.expander(t("ha_bsfc_crosscheck_title"), icon=":material/eco:"):
         if "bsfc_avg_report" in reports_df.columns:
             fig = go.Figure(go.Scatter(x=reports_df["finish"], y=reports_df["bsfc_avg_report"], mode="lines+markers", name="BSFC (отчёт HA)"))
             fig.update_layout(height=rsp_height(280), yaxis_title="g/kWh")
@@ -5964,7 +5974,7 @@ def render_maintenance_journal(records: list) -> None:
         short_desc = desc if len(desc) <= 60 else desc[:57] + "…"
         header = f"📄 {rec.get('date', '—')} · {mileage_txt} {t('unit_km')} · {short_desc}"
 
-        with st.expander(header):
+        with st.expander(header, icon=":material/receipt_long:"):
             c1, c2 = st.columns(2)
             c1.metric(t("col_date"), rec.get("date") or "—")
             c2.metric(t("col_mileage"), mileage_txt)
@@ -6029,183 +6039,185 @@ def render_tab5(db_path, file_version):
     render_maintenance_journal(records)
 
     st.divider()
-    st.subheader(t("maintenance_status_title"))
+    with st.expander(t("maintenance_status_title"), expanded=True, icon=":material/event_available:"):
+        st.subheader(t("maintenance_status_title"))
 
-    status_list, current_mileage, lpg_active = compute_maintenance_status(db_path, file_version, records)
-    st.caption(t("maintenance_current_mileage").format(value=f"{current_mileage:,.0f}".replace(",", " ")))
-    if lpg_active:
-        st.caption(t("lpg_installed_note"))
+        status_list, current_mileage, lpg_active = compute_maintenance_status(db_path, file_version, records)
+        st.caption(t("maintenance_current_mileage").format(value=f"{current_mileage:,.0f}".replace(",", " ")))
+        if lpg_active:
+            st.caption(t("lpg_installed_note"))
 
-    item_labels = {
-        "oil": {"ru": "Моторное масло 0W-16", "pl": "Olej silnikowy 0W-16"},
-        "spark_plugs": {"ru": "Свечи зажигания", "pl": "Świece zapłonowe"},
-        "brake_fluid": {"ru": "Тормозная жидкость", "pl": "Płyn hamulcowy"},
-        "coolant": {"ru": "Антифриз SLLC", "pl": "Płyn chłodniczy SLLC"},
-        "air_filter": {"ru": "Воздушный фильтр", "pl": "Filtr powietrza"},
-        "cvt_oil": {"ru": "Масло e-CVT (ATF WS)", "pl": "Olej e-CVT (ATF WS)"},
-        "lpg_filters": {"ru": "Фильтры ГБО", "pl": "Filtry LPG"},
-        "lpg_valves": {"ru": "Зазоры клапанов (ГБО)", "pl": "Luzy zaworowe (LPG)"},
-    }
-    status_icon = {
-        "overdue": t("maintenance_status_overdue"),
-        "soon": t("maintenance_status_soon"),
-        "ok": t("maintenance_status_ok"),
-    }
+        item_labels = {
+            "oil": {"ru": "Моторное масло 0W-16", "pl": "Olej silnikowy 0W-16"},
+            "spark_plugs": {"ru": "Свечи зажигания", "pl": "Świece zapłonowe"},
+            "brake_fluid": {"ru": "Тормозная жидкость", "pl": "Płyn hamulcowy"},
+            "coolant": {"ru": "Антифриз SLLC", "pl": "Płyn chłodniczy SLLC"},
+            "air_filter": {"ru": "Воздушный фильтр", "pl": "Filtr powietrza"},
+            "cvt_oil": {"ru": "Масло e-CVT (ATF WS)", "pl": "Olej e-CVT (ATF WS)"},
+            "lpg_filters": {"ru": "Фильтры ГБО", "pl": "Filtry LPG"},
+            "lpg_valves": {"ru": "Зазоры клапанов (ГБО)", "pl": "Luzy zaworowe (LPG)"},
+        }
+        status_icon = {
+            "overdue": t("maintenance_status_overdue"),
+            "soon": t("maintenance_status_soon"),
+            "ok": t("maintenance_status_ok"),
+        }
 
-    lang = st.session_state.get("lang", "pl")
-    for item in status_list:
-        label = item_labels.get(item["key"], {}).get(lang, item["key"])
-        cols = st.columns([3, 2, 2, 2])
-        cols[0].markdown(f"**{label}**")
-        cols[1].markdown(status_icon[item["status"]])
-        if item["remaining_km"] is not None:
-            cols[2].markdown(t("maintenance_status_km_left").format(km=f"{item['remaining_km']:,.0f}".replace(",", " ")))
-        if item["remaining_days"] is not None:
-            cols[3].markdown(t("maintenance_status_days_left").format(days=item["remaining_days"]))
-        if item.get("oil_adjustment_pct"):
-            st.caption(t("smart_oil_hint").format(pct=item["oil_adjustment_pct"]))
+        lang = st.session_state.get("lang", "pl")
+        for item in status_list:
+            label = item_labels.get(item["key"], {}).get(lang, item["key"])
+            cols = st.columns([3, 2, 2, 2])
+            cols[0].markdown(f"**{label}**")
+            cols[1].markdown(status_icon[item["status"]])
+            if item["remaining_km"] is not None:
+                cols[2].markdown(t("maintenance_status_km_left").format(km=f"{item['remaining_km']:,.0f}".replace(",", " ")))
+            if item["remaining_days"] is not None:
+                cols[3].markdown(t("maintenance_status_days_left").format(days=item["remaining_days"]))
+            if item.get("oil_adjustment_pct"):
+                st.caption(t("smart_oil_hint").format(pct=item["oil_adjustment_pct"]))
 
     st.divider()
-    st.subheader(t("add_record_header"))
+    with st.expander(t("add_record_header"), expanded=False, icon=":material/add_circle:"):
+        st.subheader(t("add_record_header"))
 
-    # --- Распознавание фактуры через Gemini ---
-    st.markdown(f"**{t('invoice_section_title')}**")
-    if GENAI_AVAILABLE and get_gemini_api_key():
-        st.caption(t("invoice_how_it_works"))
-        uploaded_invoice = st.file_uploader(
-            t("invoice_upload_label"),
-            type=["jpg", "jpeg", "png"],
-            key="invoice_uploader",
-            help=t("invoice_upload_help"),
-        )
-        if uploaded_invoice is not None:
-            preview_col, result_col = (
-                stacked_columns(2) if is_mobile() else st.columns([1, 2])
+        # --- Распознавание фактуры через Gemini ---
+        st.markdown(f"**{t('invoice_section_title')}**")
+        if GENAI_AVAILABLE and get_gemini_api_key():
+            st.caption(t("invoice_how_it_works"))
+            uploaded_invoice = st.file_uploader(
+                t("invoice_upload_label"),
+                type=["jpg", "jpeg", "png"],
+                key="invoice_uploader",
+                help=t("invoice_upload_help"),
             )
-            with preview_col:
-                st.image(uploaded_invoice, caption=uploaded_invoice.name, width="stretch")
+            if uploaded_invoice is not None:
+                preview_col, result_col = (
+                    stacked_columns(2) if is_mobile() else st.columns([1, 2])
+                )
+                with preview_col:
+                    st.image(uploaded_invoice, caption=uploaded_invoice.name, width="stretch")
 
-            with result_col:
-                # Распознаём только при появлении НОВОГО файла, иначе каждый
-                # клик по странице заново дёргал бы платный API.
-                if st.session_state.get("last_invoice_name") != uploaded_invoice.name:
-                    with st.spinner(t("invoice_processing")):
-                        data = extract_invoice_data(
-                            uploaded_invoice.getvalue(), uploaded_invoice.type or "image/jpeg"
-                        )
-                    st.session_state["last_invoice_name"] = uploaded_invoice.name
-                    st.session_state["last_invoice_bytes"] = uploaded_invoice.getvalue()
-                    st.session_state["last_invoice_result"] = data
+                with result_col:
+                    # Распознаём только при появлении НОВОГО файла, иначе каждый
+                    # клик по странице заново дёргал бы платный API.
+                    if st.session_state.get("last_invoice_name") != uploaded_invoice.name:
+                        with st.spinner(t("invoice_processing")):
+                            data = extract_invoice_data(
+                                uploaded_invoice.getvalue(), uploaded_invoice.type or "image/jpeg"
+                            )
+                        st.session_state["last_invoice_name"] = uploaded_invoice.name
+                        st.session_state["last_invoice_bytes"] = uploaded_invoice.getvalue()
+                        st.session_state["last_invoice_result"] = data
 
-                data = st.session_state.get("last_invoice_result", {})
-                if not data:
-                    st.info(t("invoice_waiting"))
-                elif "error" in data:
-                    st.error(t("invoice_error").format(error=data["error"]))
-                    st.caption(t("invoice_error_hint"))
-                else:
-                    recognized_date = data.get("date")
-                    recognized_odo = data.get("odo")
-                    recognized_desc = data.get("desc")
-                    st.session_state["invoice_prefill_date"] = recognized_date
-                    st.session_state["invoice_prefill_odo"] = recognized_odo
-                    st.session_state["invoice_prefill_desc"] = recognized_desc
-
-                    missing = [
-                        label
-                        for value, label in (
-                            (recognized_date, t("form_date")),
-                            (recognized_odo, t("form_mileage")),
-                            (recognized_desc, t("form_description")),
-                        )
-                        if not value
-                    ]
-                    if missing:
-                        st.warning(t("invoice_partial").format(fields=", ".join(missing)))
+                    data = st.session_state.get("last_invoice_result", {})
+                    if not data:
+                        st.info(t("invoice_waiting"))
+                    elif "error" in data:
+                        st.error(t("invoice_error").format(error=data["error"]))
+                        st.caption(t("invoice_error_hint"))
                     else:
-                        st.success(t("invoice_success"))
+                        recognized_date = data.get("date")
+                        recognized_odo = data.get("odo")
+                        recognized_desc = data.get("desc")
+                        st.session_state["invoice_prefill_date"] = recognized_date
+                        st.session_state["invoice_prefill_odo"] = recognized_odo
+                        st.session_state["invoice_prefill_desc"] = recognized_desc
 
-                    st.markdown(
-                        f"- **{t('form_date')}:** {recognized_date or '—'}\n"
-                        f"- **{t('form_mileage')}:** {recognized_odo or '—'}\n"
-                        f"- **{t('form_description')}:** {recognized_desc or '—'}"
-                    )
-                    st.caption(t("invoice_check_before_save"))
-    else:
-        st.info(t("invoice_unavailable"))
+                        missing = [
+                            label
+                            for value, label in (
+                                (recognized_date, t("form_date")),
+                                (recognized_odo, t("form_mileage")),
+                                (recognized_desc, t("form_description")),
+                            )
+                            if not value
+                        ]
+                        if missing:
+                            st.warning(t("invoice_partial").format(fields=", ".join(missing)))
+                        else:
+                            st.success(t("invoice_success"))
 
-    if not _render_password_gate(
-        "maintenance", "maintenance_password_hash", _FALLBACK_PASSWORD_HASH, "maintenance_unlocked",
-        widget_key_prefix="maintenance_form",
-    ):
-        return
+                        st.markdown(
+                            f"- **{t('form_date')}:** {recognized_date or '—'}\n"
+                            f"- **{t('form_mileage')}:** {recognized_odo or '—'}\n"
+                            f"- **{t('form_description')}:** {recognized_desc or '—'}"
+                        )
+                        st.caption(t("invoice_check_before_save"))
+        else:
+            st.info(t("invoice_unavailable"))
 
-    prefill_date = st.session_state.get("invoice_prefill_date")
-    try:
-        prefill_date_value = datetime.strptime(prefill_date, "%Y-%m-%d").date() if prefill_date else date.today()
-    except (ValueError, TypeError):
-        prefill_date_value = date.today()
-    prefill_odo = st.session_state.get("invoice_prefill_odo") or 0
-    prefill_desc = st.session_state.get("invoice_prefill_desc") or ""
+        if not _render_password_gate(
+            "maintenance", "maintenance_password_hash", _FALLBACK_PASSWORD_HASH, "maintenance_unlocked",
+            widget_key_prefix="maintenance_form",
+        ):
+            return
 
-    with st.form("maintenance_form", clear_on_submit=True):
-        record_date = st.date_input(t("form_date"), value=prefill_date_value)
-        record_mileage = st.number_input(t("form_mileage"), min_value=0, step=100, value=int(prefill_odo) if prefill_odo else 0)
-        record_description = st.text_area(t("form_description"), value=prefill_desc)
+        prefill_date = st.session_state.get("invoice_prefill_date")
+        try:
+            prefill_date_value = datetime.strptime(prefill_date, "%Y-%m-%d").date() if prefill_date else date.today()
+        except (ValueError, TypeError):
+            prefill_date_value = date.today()
+        prefill_odo = st.session_state.get("invoice_prefill_odo") or 0
+        prefill_desc = st.session_state.get("invoice_prefill_desc") or ""
 
-        st.markdown(f"**{t('part_details')}** — {t('part_details_optional')}")
-        p1, p2 = st.columns(2)
-        with p1:
-            part_manufacturer = st.text_input(t("part_manufacturer"), placeholder=t("part_manufacturer_ph"))
-            part_spec = st.text_input(t("part_spec"), placeholder=t("part_spec_ph"))
-            part_price = st.text_input(t("part_price"), placeholder=t("part_price_ph"))
-        with p2:
-            part_name = st.text_input(t("part_name"), placeholder=t("part_name_ph"))
-            part_quantity = st.text_input(t("part_quantity"), placeholder=t("part_quantity_ph"))
+        with st.form("maintenance_form", clear_on_submit=True):
+            record_date = st.date_input(t("form_date"), value=prefill_date_value)
+            record_mileage = st.number_input(t("form_mileage"), min_value=0, step=100, value=int(prefill_odo) if prefill_odo else 0)
+            record_description = st.text_area(t("form_description"), value=prefill_desc)
 
-        attach_photo = st.checkbox(t("attach_invoice_photo"), value=True)
-        submitted = st.form_submit_button(t("save_button"))
+            st.markdown(f"**{t('part_details')}** — {t('part_details_optional')}")
+            p1, p2 = st.columns(2)
+            with p1:
+                part_manufacturer = st.text_input(t("part_manufacturer"), placeholder=t("part_manufacturer_ph"))
+                part_spec = st.text_input(t("part_spec"), placeholder=t("part_spec_ph"))
+                part_price = st.text_input(t("part_price"), placeholder=t("part_price_ph"))
+            with p2:
+                part_name = st.text_input(t("part_name"), placeholder=t("part_name_ph"))
+                part_quantity = st.text_input(t("part_quantity"), placeholder=t("part_quantity_ph"))
 
-        if submitted:
-            if record_description.strip() == "":
-                st.warning(t("save_fill_all"))
-            else:
-                new_record = {
-                    "date": record_date.strftime("%Y-%m-%d"),
-                    "mileage": int(record_mileage),
-                    "description": record_description.strip(),
-                }
-                for key, value in (
-                    ("manufacturer", part_manufacturer),
-                    ("product_name", part_name),
-                    ("spec", part_spec),
-                    ("quantity", part_quantity),
-                    ("price", part_price),
-                ):
-                    if value and value.strip():
-                        new_record[key] = value.strip()
+            attach_photo = st.checkbox(t("attach_invoice_photo"), value=True)
+            submitted = st.form_submit_button(t("save_button"))
 
-                # Фото фактуры сохраняем уменьшенной копией: оригинал с
-                # телефона весит несколько мегабайт, а maintenance.json
-                # хранится целиком в памяти при каждом чтении.
-                if attach_photo:
-                    raw_photo = st.session_state.get("last_invoice_bytes")
-                    if raw_photo:
-                        thumb = _make_invoice_thumbnail(raw_photo)
-                        if thumb:
-                            new_record["invoice_photo_b64"] = thumb
-
-                save_result = save_maintenance_record(new_record)
-                for k in ("invoice_prefill_date", "invoice_prefill_odo", "invoice_prefill_desc",
-                          "last_invoice_bytes", "last_invoice_name", "last_invoice_result"):
-                    st.session_state.pop(k, None)
-                if save_result.get("drive"):
-                    st.session_state["last_save_status"] = ("drive", None)
-                elif save_result.get("local"):
-                    st.session_state["last_save_status"] = ("local_only", None)
+            if submitted:
+                if record_description.strip() == "":
+                    st.warning(t("save_fill_all"))
                 else:
-                    st.session_state["last_save_status"] = ("failed", None)
-                st.rerun()
+                    new_record = {
+                        "date": record_date.strftime("%Y-%m-%d"),
+                        "mileage": int(record_mileage),
+                        "description": record_description.strip(),
+                    }
+                    for key, value in (
+                        ("manufacturer", part_manufacturer),
+                        ("product_name", part_name),
+                        ("spec", part_spec),
+                        ("quantity", part_quantity),
+                        ("price", part_price),
+                    ):
+                        if value and value.strip():
+                            new_record[key] = value.strip()
+
+                    # Фото фактуры сохраняем уменьшенной копией: оригинал с
+                    # телефона весит несколько мегабайт, а maintenance.json
+                    # хранится целиком в памяти при каждом чтении.
+                    if attach_photo:
+                        raw_photo = st.session_state.get("last_invoice_bytes")
+                        if raw_photo:
+                            thumb = _make_invoice_thumbnail(raw_photo)
+                            if thumb:
+                                new_record["invoice_photo_b64"] = thumb
+
+                    save_result = save_maintenance_record(new_record)
+                    for k in ("invoice_prefill_date", "invoice_prefill_odo", "invoice_prefill_desc",
+                              "last_invoice_bytes", "last_invoice_name", "last_invoice_result"):
+                        st.session_state.pop(k, None)
+                    if save_result.get("drive"):
+                        st.session_state["last_save_status"] = ("drive", None)
+                    elif save_result.get("local"):
+                        st.session_state["last_save_status"] = ("local_only", None)
+                    else:
+                        st.session_state["last_save_status"] = ("failed", None)
+                    st.rerun()
 
 
 def main():
