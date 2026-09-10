@@ -321,6 +321,7 @@ TR = {
         "map_period_distance_odo_help": "Одометр читается напрямую с автомобиля по OBD — это весь реально пройденный путь за период, включая поездки, которые Hybrid Assistant не записывал.",
         "map_period_distance_logged": "Из них записано",
         "map_period_distance_logged_help": "Сумма дистанций поездок, которые Hybrid Assistant успел зафиксировать. Он пишет только когда запущен и подключён к OBD-адаптеру.",
+        "map_period_gap_metric": "Не записано",
         "map_period_gap_note": "За период {km} км пройдено без записи Hybrid Assistant — приложение в это время не было подключено. На карте и в расчётах расхода эти километры не учтены.",
         "map_period_trips": "Поездок за период",
         "triplog_day_distance": "Пробег за день",
@@ -353,6 +354,7 @@ TR = {
         "unit_nm": "Нм",
         "fuel_forecast_help": "Оценка ЭБУ по длительности впрыска (данные Hybrid Assistant) — не прямое измерение топлива.",
         "fuel_real_badge": "🧾 (реально)",
+        "fuel_real_badge_short": "🧾 Данные по чекам АЗС",
         "fuel_real_badge_note": "🧾 Реальный расход по чекам АЗС (отчёт Fuelio), в отличие от прогноза ЭБУ — это подтверждённые литры и стоимость.",
         "fuel_type_lpg": "ГБО (газ)",
         "fuel_type_petrol": "Бензин",
@@ -722,6 +724,7 @@ TR = {
         "map_period_distance_odo_help": "Licznik odczytywany jest bezpośrednio z auta przez OBD — to cała rzeczywiście przejechana droga w okresie, łącznie z przejazdami, których Hybrid Assistant nie zapisał.",
         "map_period_distance_logged": "W tym zapisane",
         "map_period_distance_logged_help": "Suma dystansów przejazdów, które Hybrid Assistant zdążył zarejestrować. Zapisuje tylko wtedy, gdy jest uruchomiony i połączony z adapterem OBD.",
+        "map_period_gap_metric": "Bez zapisu",
         "map_period_gap_note": "W tym okresie {km} km przejechano bez zapisu Hybrid Assistant — aplikacja nie była wtedy połączona. Te kilometry nie są uwzględnione na mapie ani w obliczeniach spalania.",
         "map_period_trips": "Przejazdów w okresie",
         "triplog_day_distance": "Przebieg w dniu",
@@ -754,6 +757,7 @@ TR = {
         "unit_nm": "Nm",
         "fuel_forecast_help": "Szacunek sterownika na podstawie czasu wtrysku (dane Hybrid Assistant) — nie jest to bezpośredni pomiar paliwa.",
         "fuel_real_badge": "🧾 (rzeczywisty)",
+        "fuel_real_badge_short": "🧾 Dane wg paragonów",
         "fuel_real_badge_note": "🧾 Rzeczywiste spalanie wg paragonów ze stacji (raport Fuelio) — w odróżnieniu od prognozy sterownika, to potwierdzone litry i koszt.",
         "fuel_type_lpg": "LPG (gaz)",
         "fuel_type_petrol": "Benzyna",
@@ -1223,6 +1227,54 @@ def inject_responsive_css() -> None:
         }}
         [data-testid="stDataFrame"] {{
             overflow-x: auto;
+        }}
+
+        /* Всплывающие подсказки: по умолчанию Streamlit обрезает длинный
+           текст по ширине, из-за чего пояснения читались наполовину. */
+        [data-testid="stTooltipContent"] {{
+            max-width: min(92vw, 460px) !important;
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            line-height: 1.45;
+            font-size: 0.85rem;
+            padding: 0.7rem 0.85rem !important;
+            background: rgba(18, 22, 28, 0.97) !important;
+            border: 1px solid rgba(120, 200, 255, 0.20) !important;
+            border-radius: 10px !important;
+            box-shadow: 0 10px 32px rgba(0, 0, 0, 0.6) !important;
+        }}
+        [data-testid="stTooltipContent"] p {{
+            white-space: normal !important;
+            margin: 0;
+        }}
+
+        /* Навигация по разделам в боковой панели: кнопки вместо кружков
+           радио, с подсветкой при наведении и полосой под выбранной. */
+        section[data-testid="stSidebar"] [role="radiogroup"] {{
+            gap: 0.15rem;
+        }}
+        section[data-testid="stSidebar"] [role="radiogroup"] > label {{
+            padding: 0.55rem 0.75rem;
+            margin: 0;
+            border-radius: 10px 10px 6px 6px;
+            border-bottom: 2px solid transparent;
+            transition: background 200ms ease, color 200ms ease,
+                        border-color 240ms ease, box-shadow 240ms ease;
+            cursor: pointer;
+        }}
+        section[data-testid="stSidebar"] [role="radiogroup"] > label:hover {{
+            background: rgba(120, 200, 255, 0.08);
+            color: #9fd0ff;
+        }}
+        section[data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) {{
+            background: rgba(120, 200, 255, 0.10);
+            border-bottom-color: rgba(90, 180, 255, 0.9);
+            box-shadow: 0 3px 14px rgba(90, 180, 255, 0.16);
+        }}
+        /* Сам кружок радио прячем — его роль берёт на себя подсветка. */
+        section[data-testid="stSidebar"] [role="radiogroup"] > label > div:first-child {{
+            display: none !important;
         }}
         /* Шапка с фотографией фары. Слева снимок затемнён — там лежит
            заголовок, поэтому текст читается без дополнительной плашки. */
@@ -3240,7 +3292,7 @@ def load_dr_prius_files(uploaded_files) -> dict:
 # ИНТЕРФЕЙС — ОБЩЕЕ
 # ============================================================
 
-def render_sidebar():
+def render_sidebar(nav_renderer=None):
     st.sidebar.header(t("language_label"))
     lang_display = {"ru": "Русский", "pl": "Polski"}
     current_lang = st.session_state.get("lang", "pl")
@@ -3252,6 +3304,12 @@ def render_sidebar():
         label_visibility="collapsed",
     )
     st.session_state["lang"] = choice
+
+    # Навигация идёт сразу за языком: это главный элемент управления,
+    # и листать до него через настройки карт было неудобно.
+    if nav_renderer is not None:
+        st.sidebar.divider()
+        nav_renderer()
 
     st.sidebar.divider()
     device_options = {"auto": t("device_auto"), "mobile": t("device_mobile"), "desktop": t("device_desktop")}
@@ -3795,7 +3853,7 @@ def _render_fuel_log_section(fuel_df: pd.DataFrame) -> None:
         st.plotly_chart(fig, width="stretch", key="tab1_fuel_trend_chart")
     else:
         st.info(t("not_enough_data"))
-    st.caption(t("fuel_real_badge_note"))
+    st.caption(t("fuel_real_badge_short"), help=t("fuel_real_badge_note"))
 
 
 _TRIPLOG_MODE_LEGEND = {
@@ -4268,10 +4326,12 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
                     if odo_distance is not None and period_distance > 0:
                         gap = odo_distance - period_distance
                         if gap > max(5.0, odo_distance * 0.05):
-                            st.caption(
-                                t("map_period_gap_note").format(
+                            st.metric(
+                                t("map_period_gap_metric"),
+                                f"{gap:,.0f}".replace(",", " ") + f" {t('unit_km')}",
+                                help=t("map_period_gap_note").format(
                                     km=f"{gap:,.0f}".replace(",", " ")
-                                )
+                                ),
                             )
                     if pd.notna(period_avg_consumption):
                         st.markdown(
@@ -5748,7 +5808,7 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
                 )
                 fig.update_layout(height=rsp_height(300), yaxis_title=t("unit_l100km"))
                 st.plotly_chart(fig, width="stretch", key="tab4_fuel_lpg_trend")
-                st.caption(t("fuel_real_badge_note"))
+                st.caption(t("fuel_real_badge_short"), help=t("fuel_real_badge_note"))
 
                 x = (pd.to_datetime(lpg_df["date"]) - pd.to_datetime(lpg_df["date"]).min()).dt.total_seconds().to_numpy()
                 slope_per_month = np.polyfit(x, lpg_df["consumption_l100"].to_numpy(), 1)[0] * 86400 * 30
@@ -6230,26 +6290,33 @@ def main():
 
     ensure_map_code_dialog_shown()
 
-    render_sidebar()
-
     tab_keys = ["tab1", "tab2", "tab_triplog", "tab3", "tab4", "tab5"]
-    tab_titles = [t(k) for k in tab_keys]
 
-    # На телефоне пять вкладок сверху не помещаются и обрезаются, поэтому
+    # На телефоне шесть вкладок сверху не помещаются и обрезаются, поэтому
     # там навигация уезжает в боковую панель, а на экране остаётся только
     # выбранный раздел. На широком экране вкладки удобнее — оставляем их.
     mobile_nav = is_mobile()
-    if mobile_nav:
-        st.sidebar.divider()
-        selected_title = st.sidebar.radio(
-            t("nav_section"), tab_titles, key="mobile_section", label_visibility="collapsed"
+
+    def _render_nav() -> None:
+        # Названия считаются здесь, а не заранее: язык выбирается выше в
+        # той же панели, и до её отрисовки они были бы от прошлого языка.
+        titles = [t(k) for k in tab_keys]
+        chosen = st.sidebar.radio(
+            t("nav_section"), titles, key="mobile_section", label_visibility="collapsed"
         )
-        active = tab_titles.index(selected_title)
-        render_app_header(selected_title, tab_keys[active])
+        st.session_state["_active_tab"] = titles.index(chosen)
+
+    render_sidebar(_render_nav if mobile_nav else None)
+
+    tab_titles = [t(k) for k in tab_keys]
+    active = None
+    if mobile_nav:
+        active = int(st.session_state.get("_active_tab", 0))
+        active = active if 0 <= active < len(tab_keys) else 0
+        render_app_header(tab_titles[active], tab_keys[active])
     else:
         render_app_header(t("app_header_title"), "tab1")
         tabs = st.tabs(tab_titles)
-        active = None
 
     trips_df = pd.DataFrame()
     fastlog_df = pd.DataFrame()
