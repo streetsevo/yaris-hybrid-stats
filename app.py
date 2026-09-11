@@ -627,6 +627,8 @@ TR = {
         "save_success_local_only": "⚠️ Запись сохранена только во временной копии этого контейнера и БУДЕТ ПОТЕРЯНА при перезапуске приложения. Чтобы записи сохранялись навсегда, настройте сервисный аккаунт Google (см. подсказку выше).",
         "save_failed": "❌ Не удалось сохранить запись ни на Google Диск, ни локально.",
         "storage_mode_drive": "☁️ Журнал хранится в папке на Google Диске — записи переживают перезапуски приложения.",
+        "drive_api_disabled": "❌ Ключ сервисного аккаунта прочитан верно, но в проекте Google Cloud {project} не включён Google Drive API. Откройте консоль Google Cloud, выберите этот проект, найдите «Google Drive API» и нажмите «Включить». Через пару минут обновите базу данных — синхронизация заработает.",
+        "drive_json_invalid": "❌ Параметр gcp_service_account_json есть в Secrets, но внутри него не JSON ({error}). В тройных кавычках должно лежать содержимое скачанного JSON-файла как есть: пары вида \"ключ\": \"значение\" через двоеточие и запятые, а не строки вида ключ = \"значение\".",
         "storage_mode_drive_readonly": "⚠️ Журнал читается с Google Диска, но записывать туда приложение не может: не настроен сервисный аккаунт. Новые записи сохранятся только временно и пропадут при перезапуске. Как настроить: создайте сервисный аккаунт Google Cloud, дайте его email право «Редактор» на папку с базой, и вставьте его JSON-ключ в Secrets приложения под именем [gcp_service_account].",
         "storage_mode_local": "⚠️ Журнал хранится только во временной памяти контейнера и пропадёт при перезапуске приложения. Чтобы записи сохранялись навсегда, создайте сервисный аккаунт Google Cloud, дайте его email право «Редактор» на папку с базой на Google Диске и вставьте его JSON-ключ в Secrets приложения под именем [gcp_service_account].",
         "save_fill_all": "⚠️ Заполните все поля перед сохранением.",
@@ -1024,6 +1026,8 @@ TR = {
         "save_success_local_only": "⚠️ Wpis zapisany tylko w tymczasowej kopii tego kontenera i ZOSTANIE UTRACONY po restarcie aplikacji. Aby wpisy zapisywały się na stałe, skonfiguruj konto serwisowe Google (patrz wskazówka powyżej).",
         "save_failed": "❌ Nie udało się zapisać wpisu ani na Google Drive, ani lokalnie.",
         "storage_mode_drive": "☁️ Dziennik przechowywany jest w folderze na Google Drive — wpisy przetrwają restarty aplikacji.",
+        "drive_api_disabled": "❌ Klucz konta serwisowego został odczytany poprawnie, ale w projekcie Google Cloud {project} nie jest włączone Google Drive API. Otwórz konsolę Google Cloud, wybierz ten projekt, znajdź „Google Drive API” i kliknij „Włącz”. Po kilku minutach odśwież bazę danych — synchronizacja zacznie działać.",
+        "drive_json_invalid": "❌ Parametr gcp_service_account_json jest w Secrets, ale w środku nie ma JSON-a ({error}). W potrójnych cudzysłowach powinna znaleźć się zawartość pobranego pliku JSON w oryginalnej postaci: pary \"klucz\": \"wartość\" z dwukropkiem i przecinkami, a nie wiersze typu klucz = \"wartość\".",
         "storage_mode_drive_readonly": "⚠️ Dziennik jest odczytywany z Google Drive, ale aplikacja nie może tam zapisywać: brak konta serwisowego. Nowe wpisy zapiszą się tylko tymczasowo i znikną po restarcie. Jak skonfigurować: utwórz konto serwisowe Google Cloud, nadaj jego adresowi e-mail uprawnienie „Edytor” do folderu z bazą i wklej jego klucz JSON do Secrets aplikacji pod nazwą [gcp_service_account].",
         "storage_mode_local": "⚠️ Dziennik przechowywany jest tylko w tymczasowej pamięci kontenera i zniknie po restarcie aplikacji. Aby wpisy zapisywały się na stałe, utwórz konto serwisowe Google Cloud, nadaj jego adresowi e-mail uprawnienie „Edytor” do folderu z bazą na Google Drive i wklej jego klucz JSON do Secrets aplikacji pod nazwą [gcp_service_account].",
         "save_fill_all": "⚠️ Uzupełnij wszystkie pola przed zapisaniem.",
@@ -1249,129 +1253,33 @@ def inject_responsive_css() -> None:
             margin: 0;
         }}
 
-        /* Навигация по разделам в боковой панели: кнопки вместо кружков
-           радио, с подсветкой при наведении и полосой под выбранной. */
-        section[data-testid="stSidebar"] [role="radiogroup"] {{
-            gap: 0.15rem;
-        }}
-        section[data-testid="stSidebar"] [role="radiogroup"] > label {{
-            padding: 0.55rem 0.75rem;
-            margin: 0;
-            border-radius: 10px 10px 6px 6px;
-            border-bottom: 2px solid transparent;
+        /* Навигация по разделам в боковой панели. */
+        section[data-testid="stSidebar"] .stButton > button {{
+            border-radius: 10px 10px 6px 6px !important;
+            border: 1px solid rgba(140, 160, 200, 0.14) !important;
+            border-bottom: 2px solid transparent !important;
+            font-weight: 500 !important;
+            text-align: left !important;
+            justify-content: flex-start !important;
+            padding: 0.55rem 0.8rem !important;
             transition: background 200ms ease, color 200ms ease,
-                        border-color 240ms ease, box-shadow 240ms ease;
-            cursor: pointer;
+                        border-color 240ms ease, box-shadow 240ms ease !important;
         }}
-        section[data-testid="stSidebar"] [role="radiogroup"] > label:hover {{
-            background: rgba(120, 200, 255, 0.08);
-            color: #9fd0ff;
-        }}
-        section[data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) {{
-            background: rgba(120, 200, 255, 0.10);
-            border-bottom-color: rgba(90, 180, 255, 0.9);
-            box-shadow: 0 3px 14px rgba(90, 180, 255, 0.16);
-        }}
-        /* Прячем сам переключатель: его роль берёт на себя подсветка.
-           Разметка Streamlit меняется от версии к версии, поэтому
-           убираем все дочерние элементы ярлыка, кроме последнего —
-           текста раздела. Так кружок исчезает независимо от того,
-           каким тегом он отрисован. */
-        section[data-testid="stSidebar"] [role="radiogroup"] > label > *:not(:last-child) {{
-            display: none !important;
-        }}
-        section[data-testid="stSidebar"] [role="radiogroup"] input {{
-            display: none !important;
-        }}
-        section[data-testid="stSidebar"] [role="radiogroup"] > label > div:last-child {{
-            width: 100%;
-        }}
-        /* Подстраховка: если переключатель всё же отрисуется, он будет
-           в синей гамме приложения, а не фирменным красным Streamlit. */
-        section[data-testid="stSidebar"] [role="radiogroup"] {{
-            accent-color: #2f7fd4;
-        }}
-        /* Шапка с фотографией фары. Слева снимок затемнён — там лежит
-           заголовок, поэтому текст читается без дополнительной плашки. */
-        .app-header {{
-            position: relative;
-            height: 138px;
-            margin: 0 0 1.1rem 0;
-            border-radius: 16px;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            border: 1px solid rgba(255, 120, 90, 0.16);
-            /* Сама картинка задаётся в разметке (у каждой вкладки своя),
-               здесь только общие правила отображения. Якорь по правому
-               краю: объект съёмки находится в правой части кадра, и при
-               узком экране «cover» иначе обрезает его по центру. */
-            background-size: cover;
-            background-position: right center;
-        }}
-        .app-header-text {{
-            padding: 0.5rem 1.15rem;
-            max-width: 68%;
-        }}
-        .app-header-title {{
-            color: #f2f5fa;
-            font-size: 1.32rem;
-            font-weight: 650;
-            letter-spacing: 0.01em;
-            line-height: 1.2;
-            text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9);
-        }}
-        .app-header-sub {{
-            color: #b9c4d2;
-            font-size: 0.78rem;
-            margin-top: 3px;
-            opacity: 0.85;
-            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
-        }}
-
-        /* Карточки метрик в том же «стеклянном» ключе, что и экран кода. */
-        [data-testid="stMetric"] {{
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            transition: border-color 220ms ease, background 220ms ease;
-        }}
-        [data-testid="stMetric"]:hover {{
+        section[data-testid="stSidebar"] .stButton > button:hover {{
+            background: rgba(120, 200, 255, 0.09) !important;
             border-color: rgba(120, 200, 255, 0.30) !important;
+            color: #9fd0ff !important;
         }}
-        [data-testid="stExpander"] {{
-            margin-bottom: 0.55rem;
+        /* Активный раздел: заливка и синяя полоса снизу. */
+        section[data-testid="stSidebar"] .stButton > button[kind="primary"] {{
+            background: rgba(120, 200, 255, 0.12) !important;
+            border-color: rgba(120, 200, 255, 0.26) !important;
+            border-bottom-color: rgba(90, 180, 255, 0.95) !important;
+            color: #eaf4ff !important;
+            box-shadow: 0 3px 14px rgba(90, 180, 255, 0.16) !important;
         }}
-        [data-testid="stExpander"] details {{
-            background: linear-gradient(145deg,
-                rgba(255, 255, 255, 0.045) 0%,
-                rgba(255, 255, 255, 0.018) 100%);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(140, 160, 200, 0.16) !important;
-            border-radius: 14px !important;
-            overflow: hidden;
-            transition: border-color 240ms ease, box-shadow 240ms ease;
-        }}
-        [data-testid="stExpander"] details:hover {{
-            border-color: rgba(120, 200, 255, 0.34) !important;
-            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.32);
-        }}
-        /* Открытый блок подсвечивается тонкой неоновой полосой слева —
-           сразу видно, какие разделы сейчас развёрнуты. */
-        [data-testid="stExpander"] details[open] {{
-            border-color: rgba(120, 200, 255, 0.30) !important;
-            box-shadow: inset 3px 0 0 0 rgba(90, 180, 255, 0.55);
-        }}
-        [data-testid="stExpander"] summary {{
-            padding: 0.72rem 0.95rem !important;
-            font-weight: 600 !important;
-            font-size: 0.98rem !important;
-            letter-spacing: 0.01em;
-            transition: color 200ms ease, background 200ms ease;
-        }}
-        [data-testid="stExpander"] summary:hover {{
-            color: #9fd0ff;
-            background: rgba(120, 200, 255, 0.06);
+        section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {{
+            background: rgba(120, 200, 255, 0.17) !important;
         }}
 
         /* На узком экране ряд из 4-5 метрик сжимается до нечитаемых
@@ -1524,6 +1432,7 @@ def download_database() -> str:
                 except Exception as e:
                     download_error = e
                     print(f"[download_database] Drive API не сработал: {e!r}", flush=True)
+                    _remember_drive_api_error(e)
             else:
                 download_error = RuntimeError("сервисный аккаунт не настроен")
 
@@ -2871,8 +2780,12 @@ def get_drive_service():
             sa_info = json.loads(str(raw_json))
         except Exception as e:
             print(f"[drive] gcp_service_account_json не разобран как JSON: {e!r}", flush=True)
+            st.session_state["_drive_json_error"] = str(e)
 
     # Способ 1: обычная секция TOML.
+    if sa_info is not None:
+        st.session_state.pop("_drive_json_error", None)
+
     if sa_info is None:
         try:
             section = st.secrets.get("gcp_service_account")
@@ -2897,6 +2810,22 @@ def get_drive_service():
         return None
 
 
+_DRIVE_API_DISABLED_MARKERS = ("accessNotConfigured", "has not been used in project")
+
+
+def _remember_drive_api_error(error: Exception) -> None:
+    """Запоминает характерные ошибки Drive API, чтобы показать причину в
+    интерфейсе. Самая частая — API не включён в проекте Google Cloud:
+    ключ при этом полностью рабочий, дело лишь в одной галочке в консоли."""
+    message = str(error)
+    if any(marker in message for marker in _DRIVE_API_DISABLED_MARKERS):
+        project = ""
+        match = re.search(r"project (\d+)", message)
+        if match:
+            project = match.group(1)
+        st.session_state["_drive_api_disabled"] = project
+
+
 def _find_drive_file_id(service, filename: str) -> "str | None":
     try:
         safe_name = filename.replace("'", "\\'")
@@ -2914,6 +2843,7 @@ def _find_drive_file_id(service, filename: str) -> "str | None":
         return files[0]["id"] if files else None
     except Exception as e:
         print(f"[drive] поиск {filename} не удался: {e!r}", flush=True)
+        _remember_drive_api_error(e)
         return None
 
 
@@ -6102,6 +6032,14 @@ def render_tab5(db_path, file_version):
         else:
             st.error(t("save_failed"))
 
+    json_error = st.session_state.get("_drive_json_error")
+    if json_error:
+        st.error(t("drive_json_invalid").format(error=json_error))
+
+    disabled_project = st.session_state.get("_drive_api_disabled")
+    if disabled_project is not None:
+        st.error(t("drive_api_disabled").format(project=disabled_project or "—"))
+
     mode = get_maintenance_storage_mode()
     if mode == "drive":
         st.caption(t("storage_mode_drive"))
@@ -6315,11 +6253,24 @@ def main():
     def _render_nav() -> None:
         # Названия считаются здесь, а не заранее: язык выбирается выше в
         # той же панели, и до её отрисовки они были бы от прошлого языка.
+        #
+        # Используются обычные кнопки, а не переключатель: у радио-кнопок
+        # Streamlit рисует собственный кружок глубоко внутри разметки, и
+        # убрать его стилями надёжно не выходит — вёрстка меняется от
+        # версии к версии. С кнопками активный раздел выделяется штатным
+        # видом primary, без вмешательства во внутренности виджета.
         titles = [t(k) for k in tab_keys]
-        chosen = st.sidebar.radio(
-            t("nav_section"), titles, key="mobile_section", label_visibility="collapsed"
-        )
-        st.session_state["_active_tab"] = titles.index(chosen)
+        current = int(st.session_state.get("_active_tab", 0))
+        current = current if 0 <= current < len(titles) else 0
+        for i, title in enumerate(titles):
+            if st.sidebar.button(
+                title,
+                key=f"nav_{tab_keys[i]}",
+                width="stretch",
+                type="primary" if i == current else "secondary",
+            ):
+                st.session_state["_active_tab"] = i
+                st.rerun()
 
     render_sidebar(_render_nav if mobile_nav else None)
 
