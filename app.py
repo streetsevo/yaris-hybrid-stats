@@ -1253,6 +1253,43 @@ def inject_responsive_css() -> None:
             margin: 0;
         }}
 
+        /* Шапка раздела. Сама картинка задаётся в разметке (у каждой
+           вкладки своя), здесь — геометрия и типографика. Якорь фона по
+           правому краю: объект съёмки находится в правой части кадра, и
+           при узком экране «cover» иначе обрезает его по центру. */
+        .app-header {{
+            position: relative;
+            height: 138px;
+            margin: 0 0 1.1rem 0;
+            border-radius: 16px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            border: 1px solid rgba(255, 120, 90, 0.16);
+            background-size: cover;
+            background-position: right center;
+            background-repeat: no-repeat;
+        }}
+        .app-header-text {{
+            padding: 0.5rem 1.15rem;
+            max-width: 68%;
+        }}
+        .app-header-title {{
+            color: #f2f5fa;
+            font-size: 1.32rem;
+            font-weight: 650;
+            letter-spacing: 0.01em;
+            line-height: 1.2;
+            text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9);
+        }}
+        .app-header-sub {{
+            color: #b9c4d2;
+            font-size: 0.78rem;
+            margin-top: 3px;
+            opacity: 0.85;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+        }}
+
         /* Пустое состояние: вместо безликой плашки — аккуратная карточка
            с пояснением, что делать дальше. */
         .empty-state {{
