@@ -579,7 +579,8 @@ TR = {
         "ha_bsfc_crosscheck_note": "Собственный расчёт BSFC из базы данных — на вкладке \"Детальные логи\" для той же поездки; эти значения должны быть близки.",
         # --- Вкладка 5: ТО ---
         "maintenance_title": "История технического обслуживания",
-        "maintenance_empty": "Записи о техническом обслуживании отсутствуют.",
+        "maintenance_empty": "Записей пока нет",
+        "maintenance_empty_hint": "Добавьте первую запись в блоке ниже — и приложение начнёт считать остаток до следующего обслуживания по каждому пункту. Пока записей нет, интервалы отсчитываются от года выпуска и нулевого пробега, поэтому всё показано просроченным.",
         "col_date": "Дата",
         "col_mileage": "Пробег (км)",
         "col_description": "Что сделано",
@@ -978,7 +979,8 @@ TR = {
         "ha_bsfc_crosscheck_title": "BSFC wg raportów (weryfikacja z obliczeniem z bazy)",
         "ha_bsfc_crosscheck_note": "Własne obliczenie BSFC z bazy danych — w zakładce \"Szczegółowe logi\" dla tego samego przejazdu; te wartości powinny być zbliżone.",
         "maintenance_title": "Historia przeglądów technicznych",
-        "maintenance_empty": "Brak zapisanych przeglądów.",
+        "maintenance_empty": "Brak zapisanych przeglądów",
+        "maintenance_empty_hint": "Dodaj pierwszy wpis w sekcji poniżej — aplikacja zacznie liczyć pozostały zapas do kolejnej obsługi dla każdej pozycji. Dopóki wpisów nie ma, interwały liczone są od roku produkcji i zerowego przebiegu, dlatego wszystko pokazywane jest jako przeterminowane.",
         "col_date": "Data",
         "col_mileage": "Przebieg (km)",
         "col_description": "Zakres prac",
@@ -1154,22 +1156,20 @@ _TAB_BANNERS: dict = {
 def render_app_header(section_title: str, tab_key: "str | None" = None) -> None:
     """Шапка с фотографией и названием текущего раздела."""
     image_b64 = _TAB_BANNERS.get(tab_key) or _HEADER_IMAGE_B64
-    st.markdown(
-        f"""
-        <div class="app-header" style="background-image:
-            linear-gradient(to right,
-                rgba(10, 11, 14, 0.93) 0%,
-                rgba(10, 11, 14, 0.62) 42%,
-                rgba(10, 11, 14, 0.10) 100%),
-            url('data:image/webp;base64,{image_b64}');">
-          <div class="app-header-text">
-            <div class="app-header-title">{section_title}</div>
-            <div class="app-header-sub">Toyota Yaris 4 Hybrid</div>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    # Разметка собирается одной строкой без отступов: markdown принимает
+    # блоки с отступом в четыре пробела за код и выводит их как текст,
+    # а перенос строк внутри атрибута style ломает фон.
+    gradient = ("linear-gradient(to right,"
+                "rgba(10,11,14,0.90) 0%,rgba(10,11,14,0.52) 45%,rgba(10,11,14,0.04) 100%)")
+    html = (
+        f'<div class="app-header" style="background-image:{gradient},'
+        f"url('data:image/webp;base64,{image_b64}')\">"
+        f'<div class="app-header-text">'
+        f'<div class="app-header-title">{section_title}</div>'
+        f'<div class="app-header-sub">Toyota Yaris 4 Hybrid</div>'
+        f"</div></div>"
     )
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def inject_responsive_css() -> None:
@@ -1251,6 +1251,34 @@ def inject_responsive_css() -> None:
         [data-testid="stTooltipContent"] p {{
             white-space: normal !important;
             margin: 0;
+        }}
+
+        /* Пустое состояние: вместо безликой плашки — аккуратная карточка
+           с пояснением, что делать дальше. */
+        .empty-state {{
+            border: 1px dashed rgba(140, 160, 200, 0.22);
+            border-radius: 14px;
+            padding: 1.4rem 1.2rem;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.02);
+        }}
+        .empty-state-icon {{
+            font-size: 1.8rem;
+            opacity: 0.55;
+            margin-bottom: 0.4rem;
+        }}
+        .empty-state-title {{
+            font-size: 1.02rem;
+            font-weight: 600;
+            color: #dbe4ef;
+            margin-bottom: 0.35rem;
+        }}
+        .empty-state-text {{
+            font-size: 0.84rem;
+            line-height: 1.5;
+            color: #8c9aab;
+            max-width: 46ch;
+            margin: 0 auto;
         }}
 
         /* Навигация по разделам в боковой панели. */
@@ -4307,7 +4335,6 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
 
     with st.expander(t("expert_params_title"), expanded=False, icon=":material/science:"):
         # --- Экспертные параметры ---
-        st.subheader(t("expert_params_title"))
         ecol1, ecol2 = stacked_columns(2)
         with ecol1:
             st.markdown(f"**{t('ltft_title')}**")
@@ -4327,7 +4354,6 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
 
     with st.expander(t("smart_diag_title"), expanded=False, icon=":material/insights:"):
         # --- Smart Diagnostics ---
-        st.subheader(t("smart_diag_title"))
         dcol1, dcol2 = stacked_columns(2)
         with dcol1:
             st.markdown(f"**{t('soh_forecast_title')}**")
@@ -4375,7 +4401,6 @@ def render_tab1(trips_df, fastlog_df, temp_df, cell_df, db_path, file_version, f
                 st.info(t("not_enough_data"))
 
     with st.expander(t("maint_forecast_title"), expanded=False, icon=":material/build:"):
-        st.markdown(f"**{t('maint_forecast_title')}**")
         records = load_maintenance()
         status_list, _current_mileage, lpg_active = compute_maintenance_status(db_path, file_version, records)
         render_smart_maintenance_cards(status_list, lpg_active)
@@ -5076,7 +5101,6 @@ def render_tab3():
 
     st.divider()
     with st.expander(t("drprius_wear_title"), expanded=False, icon=":material/trending_down:"):
-        st.markdown(f"#### {t('drprius_wear_title')}")
         months_sorted = list(all_blocks_by_month.keys())
         if len(months_sorted) < 2:
             st.info(t("drprius_need_two_months"))
@@ -5103,7 +5127,6 @@ def render_tab3():
 
     st.divider()
     with st.expander(t("drprius_temp_spread_title"), expanded=False, icon=":material/thermostat:"):
-        st.markdown(f"#### {t('drprius_temp_spread_title')}")
         if any(v is not None for v in temps):
             valid_temps = [v for v in temps if v is not None and pd.notna(v)]
             if len(valid_temps) >= 2:
@@ -5601,7 +5624,6 @@ def _render_password_gate(
 
 def render_tab4(trips_df, temp_df, cell_df, fuel_df):
     with st.expander(t("compare_table_title"), expanded=True, icon=":material/compare_arrows:"):
-        st.markdown(f"#### {t('compare_table_title')}")
 
         dr_files = st.session_state.get("drprius_uploader")
         dr_parsed = load_dr_prius_files(dr_files) if dr_files else {}
@@ -5742,7 +5764,6 @@ def render_tab4(trips_df, temp_df, cell_df, fuel_df):
         # --- Fuelio: реальный расход LPG во времени (по чекам АЗС) ---
     st.divider()
     with st.expander(t("fuel_trend_health_title"), expanded=False, icon=":material/local_gas_station:"):
-        st.subheader(t("fuel_trend_health_title"))
         if fuel_df.empty:
             st.info(t("fuel_log_no_data"))
         else:
@@ -5966,7 +5987,14 @@ def render_maintenance_journal(records: list) -> None:
     Фото фактуры показывается только при разблокированном коде — оно
     может содержать личные данные (адрес, номер авто, реквизиты)."""
     if not records:
-        st.info(t("maintenance_empty"))
+        st.markdown(
+            f'<div class="empty-state">'
+            f'<div class="empty-state-icon">🧰</div>'
+            f'<div class="empty-state-title">{t("maintenance_empty")}</div>'
+            f'<div class="empty-state-text">{t("maintenance_empty_hint")}</div>'
+            f"</div>",
+            unsafe_allow_html=True,
+        )
         return
 
     ordered = sorted(records, key=lambda r: (r.get("date") or "", r.get("mileage") or 0), reverse=True)
@@ -6053,7 +6081,6 @@ def render_tab5(db_path, file_version):
 
     st.divider()
     with st.expander(t("maintenance_status_title"), expanded=True, icon=":material/event_available:"):
-        st.subheader(t("maintenance_status_title"))
 
         status_list, current_mileage, lpg_active = compute_maintenance_status(db_path, file_version, records)
         st.caption(t("maintenance_current_mileage").format(value=f"{current_mileage:,.0f}".replace(",", " ")))
@@ -6091,7 +6118,6 @@ def render_tab5(db_path, file_version):
 
     st.divider()
     with st.expander(t("add_record_header"), expanded=False, icon=":material/add_circle:"):
-        st.subheader(t("add_record_header"))
 
         # --- Распознавание фактуры через Gemini ---
         st.markdown(f"**{t('invoice_section_title')}**")
