@@ -267,6 +267,8 @@ TR = {
         "map_stadia_troubleshoot": "Если подложка не загружается даже с ключом — в личном кабинете Stadia добавьте домен приложения (*.streamlit.app) в список разрешённых для вашего проекта: браузерные запросы Stadia проверяет по домену.",
         "db_autorefresh_note": "База обновляется автоматически 3 раза в сутки (каждые 8 часов). Кнопка ниже — если нужно прямо сейчас.",
         "db_last_loaded": "База данных загружена: {timestamp}",
+        "db_last_trip": "Последняя поездка в базе: {date}",
+        "db_stale_warning": "⚠️ Данные старше {days} дн. Выгрузите свежую базу из Hybrid Assistant в папку на Google Диске и нажмите «Обновить базу данных». Если в папке лежит несколько файлов .db, оставьте только последний.",
         "downloading_db": "Загрузка базы данных с Google Диска (обычно занимает 20-30 секунд, не закрывайте страницу)…",
         "refresh_in_progress_warning": "⏳ Обновление уже запущено — подождите примерно 30 секунд, повторное нажатие сейчас только всё замедлит.",
         "db_missing": "⚠️ Не удалось скачать базу данных с Google Диска. Проверьте, что доступ к файлу открыт по ссылке (\"Все, у кого есть ссылка\" → \"Читатель\").",
@@ -677,6 +679,8 @@ TR = {
         "map_stadia_troubleshoot": "Jeśli podkład nie ładuje się nawet z kluczem — w panelu Stadia dodaj domenę aplikacji (*.streamlit.app) do listy dozwolonych dla Twojego projektu: żądania z przeglądarki Stadia weryfikuje po domenie.",
         "db_autorefresh_note": "Baza odświeża się automatycznie 3 razy na dobę (co 8 godzin). Przycisk poniżej — jeśli potrzebujesz od razu.",
         "db_last_loaded": "Baza danych wczytana: {timestamp}",
+        "db_last_trip": "Ostatni przejazd w bazie: {date}",
+        "db_stale_warning": "⚠️ Dane starsze niż {days} dni. Wyeksportuj świeżą bazę z Hybrid Assistant do folderu na Google Drive i kliknij „Odśwież bazę danych”. Jeśli w folderze jest kilka plików .db, zostaw tylko najnowszy.",
         "downloading_db": "Pobieranie bazy danych z Google Drive (zwykle trwa 20-30 sekund, nie zamykaj strony)…",
         "refresh_in_progress_warning": "⏳ Odświeżanie już trwa — poczekaj około 30 sekund, ponowne kliknięcie teraz tylko to spowolni.",
         "db_missing": "⚠️ Nie udało się pobrać bazy danych z Google Drive. Sprawdź, czy dostęp do pliku jest ustawiony jako \"Każdy, kto ma link\" → \"Czytelnik\".",
@@ -1177,8 +1181,13 @@ def inject_responsive_css() -> None:
     компактнее отступы, читаемые метрики, аккуратные вкладки и
     горизонтальная прокрутка таблиц вместо обрезания."""
     mobile = is_mobile()
-    metric_value_size = "1.35rem" if mobile else "1.75rem"
-    block_padding = "0.6rem" if mobile else "1.2rem"
+    # clamp(минимум, плавная величина, максимум): размер сам подстраивается
+    # под ширину окна, поэтому промежуточные диагонали (планшеты, узкие окна
+    # на компьютере) больше не проваливаются между двумя фиксированными
+    # значениями. vw — это 1% ширины окна.
+    metric_value_size = "clamp(1.05rem, 1.15vw + 0.72rem, 1.7rem)"
+    metric_label_size = "clamp(0.72rem, 0.35vw + 0.62rem, 0.88rem)"
+    block_padding = "clamp(0.6rem, 1.2vw, 1.2rem)"
     st.markdown(
         f"""
         <style>
@@ -1203,7 +1212,7 @@ def inject_responsive_css() -> None:
         }}
         [data-testid="stMetricLabel"],
         [data-testid="stMetricLabel"] * {{
-            font-size: 0.8rem;
+            font-size: {metric_label_size};
             opacity: 0.85;
             white-space: normal !important;
             overflow: visible !important;
@@ -1259,7 +1268,7 @@ def inject_responsive_css() -> None:
            при узком экране «cover» иначе обрезает его по центру. */
         .app-header {{
             position: relative;
-            height: 138px;
+            height: clamp(96px, 12vw, 138px);
             margin: 0 0 1.1rem 0;
             border-radius: 16px;
             overflow: hidden;
@@ -1276,7 +1285,7 @@ def inject_responsive_css() -> None:
         }}
         .app-header-title {{
             color: #f2f5fa;
-            font-size: 1.32rem;
+            font-size: clamp(1.02rem, 1.1vw + 0.72rem, 1.32rem);
             font-weight: 650;
             letter-spacing: 0.01em;
             line-height: 1.2;
@@ -1351,9 +1360,21 @@ def inject_responsive_css() -> None:
            колонок в пару символов шириной. Разрешаем колонкам переноситься
            и задаём минимальную ширину — получается аккуратная сетка
            по две метрики в ряд вместо пяти сплющенных. */
+        /* Планшеты и узкие окна на компьютере: колонки переносятся по две
+           в ряд. Раньше такой ширины не существовало для вёрстки — всё,
+           что шире 640 px, считалось полноразмерным экраном. */
+        @media (min-width: 641px) and (max-width: 1100px) {{
+            [data-testid="stHorizontalBlock"] {{
+                flex-wrap: wrap !important;
+                gap: 0.5rem !important;
+            }}
+            [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {{
+                min-width: calc(50% - 0.5rem) !important;
+                flex: 1 1 calc(50% - 0.5rem) !important;
+            }}
+        }}
+
         @media (max-width: 640px) {{
-            .app-header {{ height: 118px; }}
-            .app-header-title {{ font-size: 1.05rem; }}
             .app-header-text {{ max-width: 72%; }}
             [data-testid="stHorizontalBlock"] {{
                 flex-wrap: wrap !important;
@@ -1374,10 +1395,6 @@ def inject_responsive_css() -> None:
             .block-container {{
                 padding-left: 0.6rem;
                 padding-right: 0.6rem;
-            }}
-            [data-testid="stMetricValue"],
-            [data-testid="stMetricValue"] * {{
-                font-size: 1.3rem;
             }}
         }}
         </style>
@@ -1451,6 +1468,41 @@ def download_folder_via_drive_api(service, dest_dir: str) -> "tuple[int, int]":
                 except OSError:
                     pass
     return ok, failed
+
+
+def _database_last_trip_ms(path: str) -> "int | None":
+    """Время последней поездки в базе, в миллисекундах. None, если файл
+    не читается как база Hybrid Assistant."""
+    try:
+        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as conn:
+            row = conn.execute("SELECT MAX(TSFIN) FROM TRIPS").fetchone()
+        return int(row[0]) if row and row[0] else None
+    except Exception:
+        return None
+
+
+def _pick_freshest_database(candidates: list) -> str:
+    """Выбирает базу с самыми свежими данными среди найденных файлов."""
+    scored = []
+    for path in candidates:
+        last_ms = _database_last_trip_ms(path)
+        label = (
+            pd.to_datetime(last_ms, unit="ms").strftime("%Y-%m-%d %H:%M")
+            if last_ms else "не читается"
+        )
+        print(
+            f"[download_database] кандидат {os.path.basename(path)}: "
+            f"последняя поездка {label}, {os.path.getsize(path) // 1024} КБ",
+            flush=True,
+        )
+        scored.append((last_ms or 0, os.path.getsize(path), path))
+
+    # Сначала по свежести данных, при равенстве — по размеру.
+    scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    chosen = scored[0][2]
+    if len(scored) > 1:
+        print(f"[download_database] выбран самый свежий: {os.path.basename(chosen)}", flush=True)
+    return chosen
 
 
 @st.cache_resource(show_spinner=False, ttl=DB_CACHE_TTL_SECONDS)
@@ -1549,14 +1601,11 @@ def download_database() -> str:
                     "Проверьте, что доступ к папке открыт по ссылке и файл действительно там лежит."
                 )
 
-            # Если в папке несколько .db-файлов: сначала предпочитаем файл с
-            # обычным именем hybridassistant*.db, а среди подходящих кандидатов
-            # берём самый крупный по размеру — на практике база растёт со
-            # временем, поэтому самый большой файл почти всегда самый полный/свежий
-            # экспорт. Чтобы не гадать, лучше держать в папке только один .db файл.
-            named = [c for c in db_candidates if os.path.basename(c).lower().startswith("hybridassistant")]
-            pool = named if named else db_candidates
-            chosen_temp_path = max(pool, key=os.path.getsize)
+            # Если в папке несколько .db-файлов, выбираем тот, где ФАКТИЧЕСКИ
+            # самые свежие данные: заглядываем внутрь и смотрим дату последней
+            # поездки. Прежний отбор по размеру был ненадёжен — старый экспорт
+            # мог оказаться крупнее нового и молча подменял его.
+            chosen_temp_path = _pick_freshest_database(db_candidates)
 
             if os.path.getsize(chosen_temp_path) == 0:
                 raise RuntimeError("Найденный файл базы данных пуст.")
@@ -6380,6 +6429,17 @@ def main():
         )
         try:
             trips_df = load_trips_full(db_path, file_version)
+            # Дата последней поездки в базе — главный признак того, свежий
+            # ли экспорт. Расхождение в пару дней иначе замечаешь только
+            # случайно, сверив одометр.
+            if not trips_df.empty:
+                last_trip = trips_df["date"].max()
+                days_old = (pd.Timestamp.now() - last_trip).days
+                st.sidebar.caption(
+                    t("db_last_trip").format(date=last_trip.strftime("%Y-%m-%d %H:%M"))
+                )
+                if days_old >= 2:
+                    st.sidebar.warning(t("db_stale_warning").format(days=days_old))
             fastlog_df = load_fastlog_full(db_path, file_version)
             temp_df = load_temperature_log(db_path, file_version)
             cell_df = load_cell_delta_series(db_path, file_version)
