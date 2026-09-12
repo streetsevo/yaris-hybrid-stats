@@ -261,13 +261,14 @@ TR = {
         "triplog_file_skipped": "⚠️ Пропущен файл «{name}»: маршрутов в нём не найдено.",
         "triplog_no_overlap": "⚠️ Телеметрия за время этих маршрутов не найдена — весь трек будет помечен как «нет данных о режиме». Скорее всего, Hybrid Assistant в эти дни не записывал поездки, либо база ещё не обновилась.",
         "triplog_offset_applied": "🕐 Обнаружено расхождение часов между TripLog и телеметрией: применён сдвиг {hours} ч (совпало {pct}% точек).",
-        "triplog_offset_none": "Часы совпадают, сдвиг не потребовался (совпало {pct}% точек).",
+        "triplog_match_rate": "Телеметрия нашлась для {pct}% точек трека. Остальное показано как «нет данных»: TripLog писал маршруты и тогда, когда Hybrid Assistant не был запущен.",
         "map_stadia_key_found": "🔑 Ключ Stadia найден в Secrets.",
         "map_stadia_key_missing": "🔑 Ключ Stadia не найден в Secrets. Проверьте имя параметра — оно должно быть ровно stadia_api_key.",
         "map_stadia_troubleshoot": "Если подложка не загружается даже с ключом — в личном кабинете Stadia добавьте домен приложения (*.streamlit.app) в список разрешённых для вашего проекта: браузерные запросы Stadia проверяет по домену.",
         "db_autorefresh_note": "База обновляется автоматически 3 раза в сутки (каждые 8 часов). Кнопка ниже — если нужно прямо сейчас.",
         "db_last_loaded": "База данных загружена: {timestamp}",
         "db_last_trip": "Последняя поездка в базе: {date}",
+        "db_extra_copies": "ℹ️ В папке ещё {n} старых копий базы ({names}) — они пропущены. Их можно удалить, чтобы не занимали место.",
         "db_stale_warning": "⚠️ Данные старше {days} дн. Выгрузите свежую базу из Hybrid Assistant в папку на Google Диске и нажмите «Обновить базу данных». Если в папке лежит несколько файлов .db, оставьте только последний.",
         "downloading_db": "Загрузка базы данных с Google Диска (обычно занимает 20-30 секунд, не закрывайте страницу)…",
         "refresh_in_progress_warning": "⏳ Обновление уже запущено — подождите примерно 30 секунд, повторное нажатие сейчас только всё замедлит.",
@@ -673,13 +674,14 @@ TR = {
         "triplog_file_skipped": "⚠️ Pominięto plik „{name}”: nie znaleziono w nim tras.",
         "triplog_no_overlap": "⚠️ Nie znaleziono telemetrii z czasu tych tras — cały ślad zostanie oznaczony jako „brak danych o trybie”. Prawdopodobnie Hybrid Assistant nie zapisywał wtedy przejazdów albo baza nie została jeszcze odświeżona.",
         "triplog_offset_applied": "🕐 Wykryto rozbieżność zegarów między TripLog a telemetrią: zastosowano przesunięcie {hours} h (dopasowano {pct}% punktów).",
-        "triplog_offset_none": "Zegary są zgodne, przesunięcie zbędne (dopasowano {pct}% punktów).",
+        "triplog_match_rate": "Telemetria znalazła się dla {pct}% punktów trasy. Reszta pokazana jest jako „brak danych”: TripLog zapisywał trasy także wtedy, gdy Hybrid Assistant nie był uruchomiony.",
         "map_stadia_key_found": "🔑 Klucz Stadia znaleziony w Secrets.",
         "map_stadia_key_missing": "🔑 Nie znaleziono klucza Stadia w Secrets. Sprawdź nazwę parametru — powinna brzmieć dokładnie stadia_api_key.",
         "map_stadia_troubleshoot": "Jeśli podkład nie ładuje się nawet z kluczem — w panelu Stadia dodaj domenę aplikacji (*.streamlit.app) do listy dozwolonych dla Twojego projektu: żądania z przeglądarki Stadia weryfikuje po domenie.",
         "db_autorefresh_note": "Baza odświeża się automatycznie 3 razy na dobę (co 8 godzin). Przycisk poniżej — jeśli potrzebujesz od razu.",
         "db_last_loaded": "Baza danych wczytana: {timestamp}",
         "db_last_trip": "Ostatni przejazd w bazie: {date}",
+        "db_extra_copies": "ℹ️ W folderze jest jeszcze {n} starych kopii bazy ({names}) — zostały pominięte. Można je usunąć, aby nie zajmowały miejsca.",
         "db_stale_warning": "⚠️ Dane starsze niż {days} dni. Wyeksportuj świeżą bazę z Hybrid Assistant do folderu na Google Drive i kliknij „Odśwież bazę danych”. Jeśli w folderze jest kilka plików .db, zostaw tylko najnowszy.",
         "downloading_db": "Pobieranie bazy danych z Google Drive (zwykle trwa 20-30 sekund, nie zamykaj strony)…",
         "refresh_in_progress_warning": "⏳ Odświeżanie już trwa — poczekaj około 30 sekund, ponowne kliknięcie teraz tylko to spowolni.",
@@ -1409,7 +1411,7 @@ def inject_responsive_css() -> None:
 
 def _drive_list_folder(service, folder_id: str) -> list:
     """Рекурсивно перечисляет файлы в папке Google Диска через API.
-    Возвращает список (id, имя, относительный путь)."""
+    Возвращает список (id, имя, относительный путь, время изменения)."""
     items = []
     stack = [(folder_id, "")]
     while stack:
@@ -1420,7 +1422,7 @@ def _drive_list_folder(service, folder_id: str) -> list:
                 service.files()
                 .list(
                     q=f"'{current_id}' in parents and trashed=false",
-                    fields="nextPageToken, files(id, name, mimeType)",
+                    fields="nextPageToken, files(id, name, mimeType, modifiedTime)",
                     pageSize=200,
                     pageToken=page_token,
                     supportsAllDrives=True,
@@ -1432,7 +1434,8 @@ def _drive_list_folder(service, folder_id: str) -> list:
                 if f.get("mimeType") == "application/vnd.google-apps.folder":
                     stack.append((f["id"], os.path.join(prefix, f["name"])))
                 else:
-                    items.append((f["id"], f["name"], os.path.join(prefix, f["name"])))
+                    items.append((f["id"], f["name"], os.path.join(prefix, f["name"]),
+                                  f.get("modifiedTime", "")))
             page_token = response.get("nextPageToken")
             if not page_token:
                 break
@@ -1447,8 +1450,27 @@ def download_folder_via_drive_api(service, dest_dir: str) -> "tuple[int, int]":
     from googleapiclient.http import MediaIoBaseDownload
 
     files = _drive_list_folder(service, GDRIVE_FOLDER_ID)
+
+    # Из нескольких экспортов базы качаем ТОЛЬКО самый свежий. Раньше
+    # скачивались все подряд, и при обрыве части загрузок до контейнера
+    # мог доехать старый файл вместо нового — приложение молча показывало
+    # данные недельной давности. Время изменения берём у самого Диска.
+    db_files = [f for f in files if f[1].lower().endswith(".db")]
+    if len(db_files) > 1:
+        newest = max(db_files, key=lambda f: f[3])
+        skipped = [f[1] for f in db_files if f is not newest]
+        print(
+            f"[drive] баз данных в папке: {len(db_files)}, качаю только свежую "
+            f"«{newest[1]}» ({newest[3]}); пропускаю: {skipped}",
+            flush=True,
+        )
+        st.session_state["_drive_extra_db"] = skipped
+        files = [f for f in files if not f[1].lower().endswith(".db") or f is newest]
+    else:
+        st.session_state.pop("_drive_extra_db", None)
+
     ok, failed = 0, 0
-    for file_id, name, rel_path in files:
+    for file_id, name, rel_path, _modified in files:
         target = os.path.join(dest_dir, rel_path)
         os.makedirs(os.path.dirname(target), exist_ok=True)
         try:
@@ -3585,7 +3607,9 @@ def parse_triplog_kml(file_bytes: bytes) -> list:
                 distance_km = None
         if distance_km is None:
             distance_km = float(df["dist_m"].iloc[-1]) / 1000.0
-        routes.append({"name": name, "points": df, "distance_km": distance_km})
+        # Нулевые маршруты (стоянка, ложный старт) в списке только мешают.
+        if distance_km and distance_km > 0.05:
+            routes.append({"name": name, "points": df, "distance_km": distance_km})
     return routes
 
 
@@ -3946,7 +3970,7 @@ def _best_time_offset(routes: list, fastlog: pd.DataFrame) -> "tuple[int, float]
     all_times = all_times.astype("datetime64[ns]")
     telemetry = telemetry.assign(datetime=telemetry["datetime"].astype("datetime64[ns]"))
 
-    best_offset, best_rate = 0, 0.0
+    rates = {}
     for offset in range(-3, 4):
         shifted = (all_times + pd.Timedelta(hours=offset)).sort_values()
         merged = pd.merge_asof(
@@ -3956,9 +3980,17 @@ def _best_time_offset(routes: list, fastlog: pd.DataFrame) -> "tuple[int, float]
             direction="nearest",
             tolerance=pd.Timedelta(seconds=TELEMETRY_MATCH_TOLERANCE_S),
         )
-        rate = merged["m"].notna().mean()
-        if rate > best_rate:
-            best_offset, best_rate = offset, float(rate)
+        rates[offset] = float(merged["m"].notna().mean())
+
+    ordered = sorted(rates.items(), key=lambda item: item[1], reverse=True)
+    best_offset, best_rate = ordered[0]
+    runner_up_rate = ordered[1][1] if len(ordered) > 1 else 0.0
+
+    # Сдвиг принимаем, только когда он ЯВНО лучше альтернатив. Иначе
+    # случайное превосходство на пару процентов сдвигало бы весь трек на
+    # часы и раскрашивало его неверно — а выглядело бы правдоподобно.
+    if best_offset != 0 and best_rate < max(0.25, runner_up_rate * 1.5):
+        return 0, rates.get(0, 0.0)
     return best_offset, best_rate
 
 
@@ -3972,7 +4004,6 @@ def render_triplog_route_section(fastlog: pd.DataFrame) -> None:
     drive_files = get_triplog_files_from_drive()
     if drive_files:
         st.success(t("triplog_drive_found").format(n=len(drive_files)))
-        st.caption(", ".join(f.name for f in drive_files))
     else:
         st.info(t("triplog_drive_none"))
 
@@ -4007,12 +4038,15 @@ def render_triplog_route_section(fastlog: pd.DataFrame) -> None:
         st.warning(t("triplog_file_skipped").format(name=name))
 
     offset, rate = _best_time_offset(routes, fastlog)
-    if rate < 0.05:
+    if rate < 0.02:
         st.warning(t("triplog_no_overlap"))
     elif offset != 0:
         st.info(t("triplog_offset_applied").format(hours=offset, pct=f"{rate*100:.0f}"))
     else:
-        st.caption(t("triplog_offset_none").format(pct=f"{rate*100:.0f}"))
+        # Низкая доля совпадений здесь нормальна: маршрутов в TripLog в разы
+        # больше, чем поездок, записанных телеметрией. Поясняем это, иначе
+        # цифра выглядит тревожно.
+        st.caption(t("triplog_match_rate").format(pct=f"{rate*100:.0f}"))
 
     # Название маршрута начинается с даты ("08.09.2026 Business 4,7 km"),
     # поэтому сначала сужаем выбор по дню — иначе в списке оказываются
@@ -6440,6 +6474,11 @@ def main():
                 )
                 if days_old >= 2:
                     st.sidebar.warning(t("db_stale_warning").format(days=days_old))
+                extra_db = st.session_state.get("_drive_extra_db")
+                if extra_db:
+                    st.sidebar.caption(
+                        t("db_extra_copies").format(n=len(extra_db), names=", ".join(extra_db[:3]))
+                    )
             fastlog_df = load_fastlog_full(db_path, file_version)
             temp_df = load_temperature_log(db_path, file_version)
             cell_df = load_cell_delta_series(db_path, file_version)
